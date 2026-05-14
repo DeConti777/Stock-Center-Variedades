@@ -1,0 +1,1 @@
+SELECT * FROM User WHERE email = 'admin@stockcentervariedades.com.br';

@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  /// Conexao com pool (recomendado na Vercel / serverless). No Neon: "Pooled" no dashboard.
+  url       = env("DATABASE_URL")
+  /// Conexao direta para `prisma migrate` e tarefas que exigem sessao longa. No Neon: "Direct".
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  name               String?
+  email              String              @unique
+  profileImage       String?
+  phone              String?
+  cpf                String?
+  role               String              @default("CUSTOMER")
+  passwordHash       String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  cart               Cart?
+  orders             Order[]
+  favorites          Favorite[]
+  productVisits      ProductVisit[]
+  checkoutEvents     CheckoutEvent[]
+  cartRecoveryTokens CartRecoveryToken[]
+  passwordResets     PasswordResetCode[]
+  orderItemReviews   OrderItemReview[]
+  extraSavedAddresses UserSavedAddress[]
+  /// Endereco de entrega favorito (8 digitos, sem mascara).
+  savedDeliveryCep            String?
+  savedDeliveryStreet         String?
+  savedDeliveryNumber         String?
+  savedDeliveryComplement     String?
+  savedDeliveryNeighborhood   String?
+  savedDeliveryCity           String?
+  savedDeliveryState          String?
+
+  @@map("User")
+}
+
+/// Enderecos adicionais além do favorito salvo em `User.savedDelivery*`.
+model UserSavedAddress {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cep          String
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  label        String   @default("Endereco residencial")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@map("UserSavedAddress")
+}
+
+model PasswordResetCode {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@map("PasswordResetCode")
+}
+
+model Product {
+  id                       String     @id @default(cuid())
+  slug                     String     @unique
+  name                     String
+  category                 String
+  priceInCents             Int
+  /// Custo de aquisicao (CMV) unitario, opcional — relatorios de lucro no admin.
+  costInCents              Int?
+  originalPriceInCents     Int?
+  pixDiscountPercent       Int        @default(0)
+  installmentQuantity      Int
+  installmentAmountInCents Int
+  stock                    Int        @default(0)
+  rating                   Float      @default(0)
+  reviews                  Int        @default(0)
+  shortDescription         String
+  description              String
+  badge                    String?
+  sku                      String     @unique
+  coverImage               String?
+  images                   String
+  features                 String
+  tags                     String
+  published                Boolean    @default(true)
+  /// Fim da janela de Oferta Relampago (24h apos ativacao no admin). Null = nao esta em oferta relampago.
+  flashSaleEndsAt          DateTime?
+  /// Percentual exibido na oferta (1-99), definido no admin. Null quando sem oferta ou legado.
+  flashSaleDiscountPercent Int?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  cartItems                CartItem[]
+  favorites                Favorite[]
+  visits                   ProductVisit[]
+
+  @@map("Product")
+}
+
+model ProductVisit {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  visitedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId, visitedAt])
+  @@map("ProductVisit")
+}
+
+model Cart {
+  id              String     @id @default(cuid())
+  userId          String     @unique
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           CartItem[]
+  updatedAt       DateTime   @updatedAt
+  lastRecoveredAt DateTime?
+
+  @@map("Cart")
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+
+  @@unique([cartId, productId])
+  @@map("CartItem")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("Favorite")
+}
+
+model Order {
+  id                      String             @id @default(cuid())
+  userId                  String
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                  String             @default("DRAFT")
+  paymentMethodChoice     String
+  subtotalInCents         Int
+  shippingInCents         Int
+  discountInCents         Int                @default(0)
+  totalInCents            Int
+  couponId                String?
+  couponCode              String?
+  coupon                  Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  customerName            String
+  customerEmail           String
+  customerPhone           String
+  customerCpf             String
+  /// SHIP | PICKUP — retirada na loja sem frete.
+  fulfillmentType         String             @default("SHIP")
+  /// Codigo de retirada gerado ao confirmar pagamento (PICKUP).
+  pickupCode              String?            @unique
+  shippingAddress         String
+  stripeCheckoutSessionId String?            @unique
+  stripeCustomerEmail     String?
+  stripePaymentIntentId   String?
+  inventoryReserved       Boolean            @default(false)
+  inventoryReservedAt     DateTime?
+  inventoryReserveExpiresAt DateTime?
+  paymentRetryCount       Int                @default(0)
+  shippingCode            String?
+  shippingCarrier         String?
+  trackingUrl             String?
+  invoiceUrl              String?
+  paidAt                  DateTime?
+  processingAt            DateTime?
+  shippedAt               DateTime?
+  deliveredAt             DateTime?
+  canceledAt              DateTime?
+  items                   OrderItem[]
+  checkoutEvents          CheckoutEvent[]
+  notificationLogs        NotificationLog[]
+  paymentAttempts         PaymentAttempt[]
+  couponRedemptions       CouponRedemption[]
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  @@map("Order")
+}
+
+model StripeWebhookEvent {
+  id                String   @id @default(cuid())
+  eventId           String   @unique
+  type              String
+  stripeObjectId    String?
+  orderId           String?
+  processedAt       DateTime @default(now())
+
+  @@index([orderId])
+  @@map("StripeWebhookEvent")
+}
+
+model OrderItem {
+  id               String           @id @default(cuid())
+  orderId          String
+  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  productName      String
+  productSlug      String
+  category         String
+  quantity         Int
+  unitPriceInCents Int
+  lineTotalInCents Int              @default(0)
+  image            String?
+  createdAt        DateTime         @default(now())
+  review           OrderItemReview?
+
+  @@map("OrderItem")
+}
+
+model OrderItemReview {
+  id          String    @id @default(cuid())
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating      Int
+  comment     String?
+  images      String    @default("[]")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("OrderItemReview")
+}
+
+model Coupon {
+  id                 String             @id @default(cuid())
+  code               String             @unique
+  type               String             @default("PERCENT")
+  valuePercent       Int?
+  valueInCents       Int?
+  maxUses            Int?
+  usedCount          Int                @default(0)
+  minSubtotalInCents Int                @default(0)
+  expiresAt          DateTime?
+  active             Boolean            @default(true)
+  orders             Order[]
+  redemptions        CouponRedemption[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@map("Coupon")
+}
+
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  couponId  String
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([couponId, orderId])
+  @@map("CouponRedemption")
+}
+
+model CheckoutEvent {
+  id        String   @id @default(cuid())
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  message   String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([userId])
+  @@map("CheckoutEvent")
+}
+
+model NotificationLog {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  channel    String
+  kind       String
+  recipient  String
+  subject    String
+  status     String
+  providerId String?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@map("NotificationLog")
+}
+
+model PaymentAttempt {
+  id                      String   @id @default(cuid())
+  orderId                 String
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider                String   @default("STRIPE")
+  methodChoice            String
+  stripeCheckoutSessionId String?
+  stripePaymentIntentId   String?
+  status                  String
+  errorCode               String?
+  errorMessage            String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([orderId])
+  @@map("PaymentAttempt")
+}
+
+model CartRecoveryToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String    @unique
+  cartSnapshot String
+  couponCode   String?
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@map("CartRecoveryToken")
+}
+
+model NewsletterSubscription {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String   @default("home")
+  createdAt DateTime @default(now())
+
+  @@map("NewsletterSubscription")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("ContactMessage")
+}
