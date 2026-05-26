@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { PageEventTracker } from "@/components/analytics/page-event-tracker";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { PostCheckoutRegisterCta } from "@/components/checkout/post-checkout-register-cta";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 type CanceledPageProps = {
   searchParams: Promise<{ order_id?: string }>;
@@ -28,17 +29,11 @@ export default async function CheckoutCanceledPage({
         eventName="checkout_result"
         payload={{ status: "canceled", reason: "payment_not_completed" }}
       />
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Checkout cancelado
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight">
-          Seu carrinho continua salvo para voce tentar de novo.
-        </h1>
-        <p className="mt-4 text-base text-white/75">
-          Revise os itens, ajuste a forma de pagamento e finalize quando quiser.
-        </p>
-      </div>
+      <PageHighlight
+        eyebrow="Checkout cancelado"
+        title="Seu carrinho continua salvo para voce tentar de novo."
+        description="Revise os itens, ajuste a forma de pagamento e finalize quando quiser."
+      />
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link
           href="/checkout"

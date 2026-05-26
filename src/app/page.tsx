@@ -45,6 +45,7 @@ export default async function HomePage() {
         title="Ofertas imperdiveis para renovar a casa, presentear e economizar."
         description="Selecao forte em utilidades, beleza, organizacao e eletronicos com preco baixo de verdade."
         products={featuredProducts}
+        flushTopOnMobile
       />
       <BenefitsStrip />
       <FeaturedProducts

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { formatCurrency } from "@/lib/catalog";
 import { getPrismaOrNull } from "@/lib/prisma";
+import { syncPaidOrderFromCheckoutSessionId } from "@/lib/stripe-checkout-sync";
 import { PageEventTracker } from "@/components/analytics/page-event-tracker";
 import { PostCheckoutRegisterCta } from "@/components/checkout/post-checkout-register-cta";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 type SuccessPageProps = {
   searchParams: Promise<{ session_id?: string }>;
@@ -18,14 +20,7 @@ export default async function CheckoutSuccessPage({
 
   const order =
     prisma && session_id
-      ? await prisma.order.findFirst({
-          where: {
-            stripeCheckoutSessionId: session_id,
-          },
-          include: {
-            items: true,
-          },
-        })
+      ? await syncPaidOrderFromCheckoutSessionId(prisma, session_id)
       : null;
 
   return (
@@ -38,17 +33,15 @@ export default async function CheckoutSuccessPage({
           total: order ? order.totalInCents / 100 : null,
         }}
       />
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Pedido recebido
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight">
-          Pagamento iniciado com sucesso.
-        </h1>
-        <p className="mt-4 text-base text-white/75">
-          Assim que a Stripe confirmar o pagamento, seu pedido entra no fluxo de expedicao.
-        </p>
-      </div>
+      <PageHighlight
+        eyebrow="Pedido recebido"
+        title="Pagamento iniciado com sucesso."
+        description={
+          order?.status === "PAID"
+            ? "Pagamento confirmado. Seu pedido entra no fluxo de expedicao."
+            : "Assim que a Stripe confirmar o pagamento, seu pedido entra no fluxo de expedicao."
+        }
+      />
 
       <section className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6">
         {order ? (

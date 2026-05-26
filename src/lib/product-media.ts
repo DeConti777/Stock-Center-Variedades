@@ -29,10 +29,17 @@ export function getProductHeroSrc(product: {
 
 /** Lista de slides do produto (URLs reais ou cores placeholder), mesma ordem usada na PDP. */
 export function buildProductDisplayImages(product: Product): string[] {
-  const imgs = [...product.images];
+  let imgs = [...product.images];
   const c = product.coverImage?.trim();
   if (c && isProductMediaUrl(c) && !imgs.includes(c)) {
-    return [c, ...imgs];
+    imgs = [c, ...imgs];
+  } else if (!imgs.length && c) {
+    imgs = [c];
   }
-  return imgs.length ? imgs : c ? [c] : [];
+
+  const mediaOnly = imgs.filter((v) => isProductMediaUrl(v));
+  if (mediaOnly.length > 0) {
+    return mediaOnly;
+  }
+  return imgs;
 }

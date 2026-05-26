@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/catalog";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { RebuyOrderButton } from "@/components/account/rebuy-order-button";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 export const metadata: Metadata = {
   title: "Meus Pedidos",
@@ -31,17 +32,11 @@ export default async function CustomerOrdersPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Minha conta
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Meus pedidos
-        </h1>
-        <p className="mt-3 text-base text-white/70">
-          Historico completo de compras, pagamentos e entregas.
-        </p>
-      </div>
+      <PageHighlight
+        eyebrow="Minha conta"
+        title="Meus pedidos"
+        description="Historico completo de compras, pagamentos e entregas."
+      />
 
       <section className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6">
         <div className="space-y-4">
@@ -53,7 +48,7 @@ export default async function CustomerOrdersPage() {
               >
                 <Link
                   href={`/conta/pedidos/${order.id}`}
-                  className="flex flex-col gap-4 transition hover:-translate-y-0.5 sm:flex-row sm:items-stretch sm:justify-between"
+                  className="flex min-w-0 flex-col gap-4 overflow-hidden transition hover:-translate-y-0.5 sm:flex-row sm:items-stretch sm:justify-between"
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:gap-5">
                     <OrderItemsPreview
@@ -65,8 +60,11 @@ export default async function CustomerOrdersPage() {
                       }))}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-[var(--color-ink)]">
-                        Pedido {order.id.slice(0, 8).toUpperCase()}
+                      <p className="truncate font-semibold text-[var(--color-ink)]">
+                        Pedido{" "}
+                        <span className="font-mono tracking-wide">
+                          {order.id.slice(0, 8).toUpperCase()}
+                        </span>
                       </p>
                       <p className="mt-1 text-sm text-[var(--color-muted)]">
                         {new Date(order.createdAt).toLocaleDateString("pt-BR")} · {order.items.length}{" "}

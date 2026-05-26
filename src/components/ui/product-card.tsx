@@ -38,11 +38,13 @@ export function ProductCard({
 
   return (
     <article
-      className={`premium-card group flex h-full min-w-0 flex-col overflow-hidden rounded-[1.25rem] transition duration-300 hover:border-[rgba(201,151,40,0.55)] hover:shadow-[0_28px_80px_rgba(10,10,10,0.12)] ${
+      className={`product-card-root premium-card group flex h-full min-w-0 flex-col overflow-hidden rounded-[1.25rem] transition duration-300 hover:border-[rgba(201,151,40,0.55)] hover:shadow-[0_28px_80px_rgba(10,10,10,0.12)] ${
         compact ? "hover:-translate-y-0" : "hover:-translate-y-1"
       }`}
     >
-      <div className={`block ${compact ? "p-1" : "p-2 sm:p-4"}`}>
+      <div
+        className={`product-card-media-wrap block ${compact ? "p-1" : "p-2 sm:p-4"}`}
+      >
         <ProductCardMedia
           product={product}
           href={productHref}
@@ -51,7 +53,7 @@ export function ProductCard({
         />
       </div>
       <div
-        className={`flex flex-1 flex-col ${compact ? "p-2 pt-1" : "p-2 pt-1 sm:p-5 sm:pt-2"}`}
+        className={`product-card-body flex flex-1 flex-col ${compact ? "p-2 pt-1" : "p-2 pt-1 sm:p-5 sm:pt-2"}`}
       >
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="min-w-0">
@@ -65,9 +67,9 @@ export function ProductCard({
             <Link
               href={productHref}
               onClick={onBeforeProductNavigate ? handleNavigateToPdp : undefined}
-              className={`mt-1 block font-bold text-[var(--color-ink)] sm:mt-2 ${
+              className={`product-card-title mt-1 block line-clamp-2 font-bold text-[var(--color-ink)] sm:mt-2 ${
                 compact
-                  ? "line-clamp-2 text-xs leading-snug sm:text-sm"
+                  ? "text-xs leading-snug sm:text-sm"
                   : "text-sm leading-5 sm:text-lg"
               }`}
             >
@@ -94,10 +96,12 @@ export function ProductCard({
           <span className="h-1 w-1 rounded-full bg-[var(--color-muted)]" />
           <span>{product.reviews} avaliacoes</span>
         </div>
-        <div className={compact ? "mt-2" : "mt-3 sm:mt-5"}>
+        <div
+          className={`product-card-pricing ${compact ? "mt-2" : "mt-3 sm:mt-5"}`}
+        >
           {inFlashSale ? (
             <div
-              className={`rounded-3xl bg-[#fffaf0] ${compact ? "px-2.5 py-2" : "px-4 py-3"}`}
+              className={`product-card-flash-block rounded-3xl bg-[#fffaf0] ${compact ? "px-2.5 py-2" : "px-4 py-3"}`}
             >
               {hasDiscount ? (
                 <p className="text-xs text-[var(--color-ink)] line-through">
@@ -106,7 +110,7 @@ export function ProductCard({
               ) : null}
               <div className="flex min-w-0 flex-wrap items-end gap-2">
                 <p
-                  className={`min-w-0 font-black leading-tight tracking-tight text-[var(--color-ink)] ${
+                  className={`product-card-price min-w-0 font-black leading-tight tracking-tight text-[var(--color-ink)] ${
                     compact ? "text-base" : "text-xl sm:text-2xl lg:text-3xl"
                   }`}
                 >
@@ -119,12 +123,12 @@ export function ProductCard({
                 ) : null}
               </div>
               <p
-                className={`font-bold text-[var(--color-success)] ${compact ? "mt-0.5 text-[11px]" : "mt-1 text-xs sm:text-sm"}`}
+                className={`product-card-pix font-bold text-[var(--color-success)] ${compact ? "mt-0.5 text-[11px]" : "mt-1 text-xs sm:text-sm"}`}
               >
                 Pix {formatCurrency(pixPrice)}
               </p>
               <p
-                className={`text-[var(--color-muted)] ${compact ? "mt-0.5 text-[11px] leading-tight" : "mt-1 text-sm"}`}
+                className={`product-card-installments text-[var(--color-muted)] ${compact ? "mt-0.5 text-[11px] leading-tight" : "mt-1 text-sm"}`}
               >
                 ou {product.installment.quantity}x de{" "}
                 {formatCurrency(product.installment.amount)} sem juros
@@ -142,14 +146,14 @@ export function ProductCard({
                 </p>
               ) : null}
               <p
-                className={`min-w-0 font-black leading-tight tracking-tight text-[var(--color-ink)] ${
+                className={`product-card-price min-w-0 font-black leading-tight tracking-tight text-[var(--color-ink)] ${
                   compact ? "text-sm sm:text-base" : "text-lg sm:text-2xl lg:text-3xl"
                 }`}
               >
                 {formatCurrency(product.price)}
               </p>
               <p
-                className={`mt-1 font-bold text-[var(--color-success)] ${
+                className={`product-card-pix mt-1 font-bold text-[var(--color-success)] ${
                   compact
                     ? "text-[11px]"
                     : "text-xs sm:text-sm"
@@ -158,7 +162,7 @@ export function ProductCard({
                 Pix {formatCurrency(pixPrice)}
               </p>
               <p
-                className={`mt-1 hidden text-sm text-[var(--color-muted)] sm:block ${
+                className={`product-card-installments mt-1 hidden text-sm text-[var(--color-muted)] sm:block ${
                   compact ? "!hidden" : ""
                 }`}
               >

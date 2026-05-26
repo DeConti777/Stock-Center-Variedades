@@ -6,7 +6,6 @@ import { ProductCard } from "@/components/ui/product-card";
 import { formatCurrency } from "@/lib/catalog";
 import { getProductHeroSrc } from "@/lib/product-media";
 import type { Product } from "@/lib/types";
-import { formatCepDisplay, onlyDigits } from "@/lib/br-fields";
 import { useStore } from "@/components/store/store-provider";
 import { isLikelyMobileViewport, trackEcommerceEvent } from "@/lib/analytics";
 
@@ -24,14 +23,12 @@ export function CartView({
     applyCoupon,
     coupon,
     removeFromCart,
-    setShippingByCep,
     updateQuantity,
   } = useStore();
   const [couponInput, setCouponInput] = useState("");
-  const [cep, setCep] = useState("");
   const [couponFeedback, setCouponFeedback] = useState<string | null>(null);
-  const [freightMsg, setFreightMsg] = useState<string | null>(null);
   const isEmptyCart = cartProducts.length === 0;
+  const hasQuotedShipping = shipping > 0;
 
   function trackBeginCheckout(source: "cart_summary" | "cart_sticky_bar") {
     trackEcommerceEvent("begin_checkout", {
@@ -167,7 +164,7 @@ export function CartView({
             </div>
             <div className="flex items-center justify-between text-sm text-[var(--color-muted)]">
               <span>Frete</span>
-              <span>{formatCurrency(shipping)}</span>
+              <span>{hasQuotedShipping ? formatCurrency(shipping) : "A calcular no checkout"}</span>
             </div>
             <div className="border-t border-[var(--color-line)] pt-3">
               <div className="flex items-center justify-between text-lg font-bold text-[var(--color-ink)]">
@@ -210,45 +207,6 @@ export function CartView({
             </p>
           </div>
 
-          <div className="mt-6">
-            <label className="text-sm font-semibold text-[var(--color-ink)]">
-              Calcular frete (carrinho)
-            </label>
-            <div className="mt-2 flex gap-2">
-              <input
-                inputMode="numeric"
-                value={formatCepDisplay(cep)}
-                onChange={(event) =>
-                  setCep(onlyDigits(event.target.value, 8))
-                }
-                placeholder="00000-000"
-                className="w-full rounded-full border border-[var(--color-line)] px-4 py-3 text-sm outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setFreightMsg(null);
-                  void (async () => {
-                    const result = await setShippingByCep(cep);
-                    setFreightMsg(
-                      result.ok
-                        ? result.shippingSource === "melhor_envio"
-                          ? "Frete cotado via Melhor Envio (Correios, Jadlog e outras)."
-                          : "Frete estimado. Configure MELHOR_ENVIO_TOKEN e SHIPPING_ORIGIN_POSTAL_CODE para cotacao real."
-                        : result.error ?? "Nao foi possivel cotar o frete.",
-                    );
-                  })();
-                }}
-                className="rounded-full border border-[var(--color-line)] px-5 text-sm font-bold text-[var(--color-ink)]"
-              >
-                Calcular
-              </button>
-            </div>
-            {freightMsg ? (
-              <p className="mt-2 text-sm text-[var(--color-muted)]">{freightMsg}</p>
-            ) : null}
-          </div>
-
           <Link
             href="/checkout"
             onClick={() => trackBeginCheckout("cart_summary")}
@@ -269,7 +227,7 @@ export function CartView({
               Aproveite para conhecer estes produtos.
             </h2>
           </div>
-          <div className="product-grid-mobile grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="product-grid-mobile grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
             {recommendedProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

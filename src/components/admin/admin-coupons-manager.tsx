@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  adminActionButtonClass,
+  IconSave,
+  IconTrash,
+} from "@/components/admin/admin-mobile-ui";
 
 type Coupon = {
   id: string;
@@ -239,8 +244,9 @@ export function AdminCouponsManager({ embedded = false }: { embedded?: boolean }
           type="button"
           onClick={() => void createCoupon()}
           disabled={saving}
-          className="touch-target-mobile rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-white disabled:opacity-60"
+          className={adminActionButtonClass({ tone: "primary", compact: true })}
         >
+          <IconSave className="h-4 w-4" />
           Criar
         </button>
       </div>
@@ -268,7 +274,7 @@ export function AdminCouponsManager({ embedded = false }: { embedded?: boolean }
                   type="button"
                   onClick={() => void toggleCoupon(coupon)}
                   disabled={saving}
-                  className="touch-target-mobile rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-bold"
+                  className={adminActionButtonClass({ compact: true })}
                 >
                   {coupon.active ? "Desativar" : "Ativar"}
                 </button>
@@ -276,8 +282,9 @@ export function AdminCouponsManager({ embedded = false }: { embedded?: boolean }
                   type="button"
                   onClick={() => void deleteCoupon(coupon.id)}
                   disabled={saving}
-                  className="touch-target-mobile rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white"
+                  className={adminActionButtonClass({ tone: "danger", compact: true })}
                 >
+                  <IconTrash className="h-4 w-4" />
                   Excluir
                 </button>
               </div>
@@ -311,7 +318,7 @@ export function AdminCouponsManager({ embedded = false }: { embedded?: boolean }
                         type="button"
                         onClick={() => void toggleCoupon(coupon)}
                         disabled={saving}
-                        className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-bold"
+                        className={adminActionButtonClass({ compact: true })}
                       >
                         {coupon.active ? "Desativar" : "Ativar"}
                       </button>
@@ -319,8 +326,9 @@ export function AdminCouponsManager({ embedded = false }: { embedded?: boolean }
                         type="button"
                         onClick={() => void deleteCoupon(coupon.id)}
                         disabled={saving}
-                        className="rounded-full bg-red-500 px-4 py-2 text-xs font-bold text-white"
+                        className={adminActionButtonClass({ tone: "danger", compact: true })}
                       >
+                        <IconTrash className="h-4 w-4" />
                         Excluir
                       </button>
                     </div>

@@ -41,6 +41,18 @@ export function parseCommaSeparatedUniqueImageUrls(raw: string): string[] {
   return dedupeImageUrlsExact(parts);
 }
 
+export function commaSeparatedImageUrlsHadDuplicates(raw: string): boolean {
+  const parts = raw
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  return parts.length !== dedupeImageUrlsExact(parts).length;
+}
+
+export function normalizeCommaSeparatedImageUrls(raw: string): string {
+  return parseCommaSeparatedUniqueImageUrls(raw).join(", ");
+}
+
 /** Appends new URLs to an existing comma-separated field and returns a deduped CSV string. */
 export function mergeCommaSeparatedUniqueImageUrls(
   existingCsv: string,

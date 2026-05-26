@@ -4,7 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { uploadProductImageClient } from "@/lib/admin-product-upload";
 import { dedupeImageUrlsExact, mergeCommaSeparatedUniqueImageUrls, parseCommaSeparatedUniqueImageUrls } from "@/lib/product-json";
 import { isFlashSaleActive } from "@/lib/flash-sale";
+import { parsePackageFieldsFromForm } from "@/lib/package-dimensions";
 import type { Product, ProductTag } from "@/lib/types";
+import {
+  packageFieldsFromProduct,
+  ProductPackageFields,
+  type PackageEstimateHint,
+} from "@/components/admin/product-package-fields";
+import {
+  packageEstimateToFormValues,
+  requestPackageEstimate,
+} from "@/lib/admin-package-estimate-client";
+import {
+  adminActionButtonClass,
+  IconSave,
+} from "@/components/admin/admin-mobile-ui";
 
 type ProductEditModalProps = {
   product: Product | null;
@@ -53,6 +67,10 @@ type Draft = {
   published: boolean;
   flashSaleActive: boolean;
   flashSaleDiscountPercent: string;
+  packageWidthCm: string;
+  packageHeightCm: string;
+  packageLengthCm: string;
+  packageWeightKg: string;
 };
 
 function productToDraft(p: Product): Draft {
@@ -81,6 +99,7 @@ function productToDraft(p: Product): Draft {
     flashSaleActive: isFlashSaleActive(p),
     flashSaleDiscountPercent:
       p.flashSaleDiscountPercent != null ? String(p.flashSaleDiscountPercent) : "",
+    ...packageFieldsFromProduct(p),
   };
 }
 
@@ -96,12 +115,16 @@ export function ProductEditModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [packageEstimating, setPackageEstimating] = useState(false);
+  const [packageEstimateHint, setPackageEstimateHint] =
+    useState<PackageEstimateHint | null>(null);
 
   const resetFromProduct = useCallback((p: Product) => {
     setDraft(productToDraft(p));
     setNewCategory("");
     setError(null);
     setFieldErrors({});
+    setPackageEstimateHint(null);
   }, []);
 
   useEffect(() => {
@@ -124,6 +147,46 @@ export function ProductEditModal({
     }
     return list;
   }, [categories, product]);
+
+  async function handleEstimatePackage() {
+    if (!draft?.name.trim()) {
+      setError("Informe o nome do produto antes de estimar a embalagem.");
+      return;
+    }
+    setPackageEstimating(true);
+    setError(null);
+    try {
+      const category =
+        draft.category === "nova"
+          ? newCategory.trim() || undefined
+          : draft.category || undefined;
+      const estimate = await requestPackageEstimate({
+        name: draft.name.trim(),
+        category,
+        shortDescription: draft.shortDescription.trim() || undefined,
+        coverImage: draft.coverImage.trim() || undefined,
+        images: parseCommaSeparatedUniqueImageUrls(draft.images),
+      });
+      setPackageEstimateHint({
+        confidence: estimate.confidence,
+        reasoning: estimate.reasoning,
+        warnings: estimate.warnings,
+        skippedReason: estimate.skippedReason,
+      });
+      const fields = packageEstimateToFormValues(estimate);
+      setDraft((d) => (d ? { ...d, ...fields } : d));
+      if (estimate.packageWidthCm == null) {
+        setError(
+          estimate.skippedReason ||
+            "IA nao definiu medidas. Revise manualmente ou tente outra foto.",
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha na estimativa de embalagem.");
+    } finally {
+      setPackageEstimating(false);
+    }
+  }
 
   function toggleTag(tag: ProductTag) {
     setDraft((d) => {
@@ -234,6 +297,11 @@ export function ProductEditModal({
       }
     }
 
+    const pkg = parsePackageFieldsFromForm(draft);
+    if ("error" in pkg) {
+      errors.package = pkg.error;
+    }
+
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setError("Corrija os campos destacados.");
@@ -288,6 +356,10 @@ export function ProductEditModal({
       body.cost = null;
     }
 
+    if (!("error" in pkg)) {
+      Object.assign(body, pkg);
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -297,15 +369,16 @@ export function ProductEditModal({
         body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => null)) as
-        | { product?: Product; error?: string }
+        | { product?: Product; error?: string; details?: unknown }
         | null;
       if (!res.ok) {
         throw new Error(json?.error || "Nao foi possivel salvar.");
       }
-      if (json?.product) {
-        onSaved(json.product);
-        onClose();
+      if (!json?.product) {
+        throw new Error("Resposta do servidor sem dados do produto.");
       }
+      onSaved(json.product);
+      onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -348,7 +421,7 @@ export function ProductEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[var(--color-line)] px-3 py-1 text-sm font-semibold text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
+            className={adminActionButtonClass({ compact: true })}
           >
             Fechar
           </button>
@@ -505,6 +578,24 @@ export function ProductEditModal({
             ) : null}
           </label>
 
+          <ProductPackageFields
+            className="sm:col-span-2"
+            values={{
+              packageWidthCm: draft.packageWidthCm,
+              packageHeightCm: draft.packageHeightCm,
+              packageLengthCm: draft.packageLengthCm,
+              packageWeightKg: draft.packageWeightKg,
+            }}
+            errors={fieldErrors}
+            canEstimate={draft.name.trim().length >= 2}
+            estimating={packageEstimating}
+            onEstimate={() => void handleEstimatePackage()}
+            estimateHint={packageEstimateHint}
+            onChange={(field, value) =>
+              setDraft((d) => (d ? { ...d, [field]: value } : d))
+            }
+          />
+
           <label className="block text-sm">
             Parcelas (quantidade)
             <input
@@ -576,104 +667,111 @@ export function ProductEditModal({
             ) : null}
           </label>
 
-          <label className="block text-sm sm:col-span-2">
-            Selo / badge (opcional)
-            <input
-              value={draft.badge}
-              onChange={(e) => setDraft((d) => (d ? { ...d, badge: e.target.value } : d))}
-              className={inputClass}
-            />
-          </label>
+          <details className="sm:col-span-2">
+            <summary className="touch-target-mobile cursor-pointer rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-sm font-semibold text-[var(--color-ink)]">
+              Campos avancados (tags, selo e oferta)
+            </summary>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm sm:col-span-2">
+                Selo / badge (opcional)
+                <input
+                  value={draft.badge}
+                  onChange={(e) => setDraft((d) => (d ? { ...d, badge: e.target.value } : d))}
+                  className={inputClass}
+                />
+              </label>
 
-          <div className="block text-sm sm:col-span-2">
-            <span className="font-semibold text-[var(--color-ink)]">Tags</span>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {TAG_OPTIONS.map(({ value, label }) => (
-                <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+              <div className="block text-sm sm:col-span-2">
+                <span className="font-semibold text-[var(--color-ink)]">Tags</span>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {TAG_OPTIONS.map(({ value, label }) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={draft.tags.includes(value)}
+                        onChange={() => toggleTag(value)}
+                        className="rounded border-[var(--color-line)]"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="block rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 sm:col-span-2">
+                <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-[var(--color-ink)]">
                   <input
                     type="checkbox"
-                    checked={draft.tags.includes(value)}
-                    onChange={() => toggleTag(value)}
-                    className="rounded border-[var(--color-line)]"
+                    checked={draft.flashSaleActive}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              flashSaleActive: e.target.checked,
+                              ...(!e.target.checked
+                                ? { flashSaleDiscountPercent: "" }
+                                : {}),
+                            }
+                          : d,
+                      )
+                    }
+                    className="mt-1 rounded border-[var(--color-line)]"
                   />
-                  {label}
+                  <span>
+                    Oferta Relâmpago
+                    <span className="mt-1 block text-xs font-normal text-[var(--color-muted)]">
+                      {!draft.flashSaleActive
+                        ? "Desmarcado: o produto deixa de aparecer no carrossel de Oferta Relâmpago."
+                        : isFlashSaleActive(product) && product.flashSaleEndsAt
+                          ? `Encerra em ${new Date(product.flashSaleEndsAt).toLocaleString("pt-BR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}. Ao salvar outras alterações, o prazo segue o mesmo enquanto estiver válido.`
+                          : "Ao salvar, inicia uma nova janela de 24 horas neste produto."}
+                    </span>
+                  </span>
                 </label>
-              ))}
+                {draft.flashSaleActive ? (
+                  <label className="mt-3 block text-sm">
+                    <span className="font-semibold text-[var(--color-ink)]">
+                      Desconto exibido na oferta (%)
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      step={1}
+                      inputMode="numeric"
+                      value={draft.flashSaleDiscountPercent}
+                      onChange={(e) =>
+                        setDraft((d) =>
+                          d
+                            ? { ...d, flashSaleDiscountPercent: e.target.value }
+                            : d,
+                        )
+                      }
+                      className={`mt-2 w-full max-w-[8rem] rounded-2xl border px-3 py-2 text-sm ${
+                        fieldErrors.flashSaleDiscountPercent
+                          ? "border-red-500"
+                          : "border-[var(--color-line)]"
+                      } bg-[var(--color-surface)]`}
+                      placeholder="ex.: 30"
+                    />
+                    {fieldErrors.flashSaleDiscountPercent ? (
+                      <span className="mt-1 block text-xs text-red-500">
+                        {fieldErrors.flashSaleDiscountPercent}
+                      </span>
+                    ) : (
+                      <span className="mt-1 block text-xs text-[var(--color-muted)]">
+                        Este valor aparece para o cliente no selo da Oferta Relâmpago (1 a 99%).
+                      </span>
+                    )}
+                  </label>
+                ) : null}
+              </div>
             </div>
-          </div>
-
-          <div className="block rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] p-4 sm:col-span-2">
-            <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-[var(--color-ink)]">
-              <input
-                type="checkbox"
-                checked={draft.flashSaleActive}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    d
-                      ? {
-                          ...d,
-                          flashSaleActive: e.target.checked,
-                          ...(!e.target.checked
-                            ? { flashSaleDiscountPercent: "" }
-                            : {}),
-                        }
-                      : d,
-                  )
-                }
-                className="mt-1 rounded border-[var(--color-line)]"
-              />
-              <span>
-                Oferta Relâmpago
-                <span className="mt-1 block text-xs font-normal text-[var(--color-muted)]">
-                  {!draft.flashSaleActive
-                    ? "Desmarcado: o produto deixa de aparecer no carrossel de Oferta Relâmpago."
-                    : isFlashSaleActive(product) && product.flashSaleEndsAt
-                      ? `Encerra em ${new Date(product.flashSaleEndsAt).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}. Ao salvar outras alterações, o prazo segue o mesmo enquanto estiver válido.`
-                      : "Ao salvar, inicia uma nova janela de 24 horas neste produto."}
-                </span>
-              </span>
-            </label>
-            {draft.flashSaleActive ? (
-              <label className="mt-3 block text-sm">
-                <span className="font-semibold text-[var(--color-ink)]">
-                  Desconto exibido na oferta (%)
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  step={1}
-                  inputMode="numeric"
-                  value={draft.flashSaleDiscountPercent}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d
-                        ? { ...d, flashSaleDiscountPercent: e.target.value }
-                        : d,
-                    )
-                  }
-                  className={`mt-2 w-full max-w-[8rem] rounded-2xl border px-3 py-2 text-sm ${
-                    fieldErrors.flashSaleDiscountPercent
-                      ? "border-red-500"
-                      : "border-[var(--color-line)]"
-                  } bg-[var(--color-surface)]`}
-                  placeholder="ex.: 30"
-                />
-                {fieldErrors.flashSaleDiscountPercent ? (
-                  <span className="mt-1 block text-xs text-red-500">
-                    {fieldErrors.flashSaleDiscountPercent}
-                  </span>
-                ) : (
-                  <span className="mt-1 block text-xs text-[var(--color-muted)]">
-                    Este valor aparece para o cliente no selo da Oferta Relâmpago (1 a 99%).
-                  </span>
-                )}
-              </label>
-            ) : null}
-          </div>
+          </details>
 
           <label className="flex cursor-pointer items-center gap-3 text-sm sm:col-span-2">
             <input
@@ -687,120 +785,127 @@ export function ProductEditModal({
             Produto publicado (visivel na loja)
           </label>
 
-          <div className="block text-sm sm:col-span-2">
-            <span className="font-semibold text-[var(--color-ink)]">Imagem de capa (URL)</span>
-            <input
-              value={draft.coverImage}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, coverImage: e.target.value } : d))
-              }
-              className={inputClass}
-            />
-            <label className="mt-2 inline-flex cursor-pointer rounded-full bg-[var(--color-ink)] px-4 py-2 text-xs font-bold text-white hover:opacity-90">
-              Enviar foto de capa
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
-                  try {
-                    const url = await uploadProductImageClient(file);
-                    setDraft((d) => (d ? { ...d, coverImage: url } : d));
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Falha no upload.");
+          <details className="sm:col-span-2" open>
+            <summary className="touch-target-mobile cursor-pointer rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-sm font-semibold text-[var(--color-ink)]">
+              Midia e conteudo
+            </summary>
+            <div className="mt-4 grid gap-4">
+              <div className="block text-sm sm:col-span-2">
+                <span className="font-semibold text-[var(--color-ink)]">Imagem de capa (URL)</span>
+                <input
+                  value={draft.coverImage}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, coverImage: e.target.value } : d))
                   }
-                }}
-              />
-            </label>
-          </div>
+                  className={inputClass}
+                />
+                <label className="mt-2 inline-flex cursor-pointer rounded-full bg-[var(--color-ink)] px-4 py-2 text-xs font-bold text-white hover:opacity-90">
+                  Enviar foto de capa
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const url = await uploadProductImageClient(file);
+                        setDraft((d) => (d ? { ...d, coverImage: url } : d));
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Falha no upload.");
+                      }
+                    }}
+                  />
+                </label>
+              </div>
 
-          <label className="block text-sm sm:col-span-2">
-            Galeria (URLs separadas por virgula)
-            <input
-              value={draft.images}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, images: e.target.value } : d))
-              }
-              className={inputClass}
-            />
-            <label className="mt-2 inline-flex cursor-pointer rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-bold hover:bg-[var(--color-surface)]">
-              Anexar URLs por upload
-              <input
-                type="file"
-                multiple
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={async (e) => {
-                  const files = e.target.files;
-                  e.target.value = "";
-                  if (!files?.length) return;
-                  try {
-                    const urls: string[] = [];
-                    for (const file of Array.from(files)) {
-                      urls.push(await uploadProductImageClient(file));
-                    }
-                    setDraft((d) =>
-                      d
-                        ? {
-                            ...d,
-                            images: mergeCommaSeparatedUniqueImageUrls(d.images, urls),
-                          }
-                        : d,
-                    );
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Falha no upload.");
+              <label className="block text-sm sm:col-span-2">
+                Galeria (URLs separadas por virgula)
+                <input
+                  value={draft.images}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, images: e.target.value } : d))
                   }
-                }}
-              />
-            </label>
-          </label>
+                  className={inputClass}
+                />
+                <label className="mt-2 inline-flex cursor-pointer rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-bold hover:bg-[var(--color-surface)]">
+                  Anexar URLs por upload
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = e.target.files;
+                      e.target.value = "";
+                      if (!files?.length) return;
+                      try {
+                        const urls: string[] = [];
+                        for (const file of Array.from(files)) {
+                          urls.push(await uploadProductImageClient(file));
+                        }
+                        setDraft((d) =>
+                          d
+                            ? {
+                                ...d,
+                                images: mergeCommaSeparatedUniqueImageUrls(d.images, urls),
+                              }
+                            : d,
+                        );
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Falha no upload.");
+                      }
+                    }}
+                  />
+                </label>
+              </label>
 
-          <label className="block text-sm sm:col-span-2">
-            Descricao curta
-            <textarea
-              value={draft.shortDescription}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, shortDescription: e.target.value } : d))
-              }
-              rows={3}
-              className={`mt-2 w-full rounded-3xl border bg-[var(--color-surface)] px-3 py-3 text-sm leading-6 ${err("shortDescription")}`}
-            />
-            {fieldErrors.shortDescription ? (
-              <span className="mt-1 text-xs text-red-500">
-                {fieldErrors.shortDescription}
-              </span>
-            ) : null}
-          </label>
+              <label className="block text-sm sm:col-span-2">
+                Descricao curta
+                <textarea
+                  value={draft.shortDescription}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, shortDescription: e.target.value } : d))
+                  }
+                  rows={3}
+                  className={`mt-2 w-full rounded-3xl border bg-[var(--color-surface)] px-3 py-3 text-sm leading-6 ${err("shortDescription")}`}
+                />
+                {fieldErrors.shortDescription ? (
+                  <span className="mt-1 text-xs text-red-500">
+                    {fieldErrors.shortDescription}
+                  </span>
+                ) : null}
+              </label>
 
-          <label className="block text-sm sm:col-span-2">
-            Descricao completa
-            <textarea
-              value={draft.description}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, description: e.target.value } : d))
-              }
-              rows={4}
-              className={`mt-2 w-full rounded-3xl border bg-[var(--color-surface)] px-3 py-3 text-sm leading-6 ${err("description")}`}
-            />
-            {fieldErrors.description ? (
-              <span className="mt-1 text-xs text-red-500">{fieldErrors.description}</span>
-            ) : null}
-          </label>
+              <label className="block text-sm sm:col-span-2">
+                Descricao completa
+                <textarea
+                  value={draft.description}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, description: e.target.value } : d))
+                  }
+                  rows={4}
+                  className={`mt-2 w-full rounded-3xl border bg-[var(--color-surface)] px-3 py-3 text-sm leading-6 ${err("description")}`}
+                />
+                {fieldErrors.description ? (
+                  <span className="mt-1 text-xs text-red-500">{fieldErrors.description}</span>
+                ) : null}
+              </label>
 
-          <label className="block text-sm sm:col-span-2">
-            Destaques (um por linha)
-            <textarea
-              value={draft.features}
-              onChange={(e) =>
-                setDraft((d) => (d ? { ...d, features: e.target.value } : d))
-              }
-              rows={5}
-              className="mt-2 w-full rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-sm leading-6"
-            />
-          </label>
+              <label className="block text-sm sm:col-span-2">
+                Destaques (um por linha)
+                <textarea
+                  value={draft.features}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, features: e.target.value } : d))
+                  }
+                  rows={5}
+                  className="mt-2 w-full rounded-3xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-3 text-sm leading-6"
+                />
+              </label>
+            </div>
+          </details>
         </div>
 
         {error ? (
@@ -814,14 +919,15 @@ export function ProductEditModal({
             type="button"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="touch-target-mobile flex-1 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-bold text-white disabled:opacity-50 sm:flex-none"
+            className={`${adminActionButtonClass({ tone: "primary" })} flex-1 sm:flex-none`}
           >
+            <IconSave className="h-4 w-4" />
             {saving ? "Salvando..." : "Salvar alteracoes"}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="touch-target-mobile flex-1 rounded-full border border-[var(--color-line)] px-6 py-3 text-sm font-semibold sm:flex-none"
+            className={`${adminActionButtonClass({})} flex-1 sm:flex-none`}
           >
             Cancelar
           </button>

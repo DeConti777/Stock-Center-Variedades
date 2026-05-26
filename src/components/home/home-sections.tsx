@@ -63,8 +63,10 @@ export function HeroSection() {
             Compre com seguranca e receba rapido.
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-6 text-white/80 sm:mt-6 sm:text-lg sm:leading-8">
-            Variedade para casa, presentes, beleza e tecnologia com Pix com
-            desconto, parcelamento e suporte humano no WhatsApp.
+            Trabalhamos com{" "}
+            <strong className="font-semibold text-white">logística reversa</strong>
+            : reaproveitamos devoluções e estoques de parceiros com procedência
+            conferida, o que permite preços mais baixos que o varejo tradicional.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
@@ -89,6 +91,9 @@ export function HeroSection() {
             </span>
             <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
               Suporte em horario comercial
+            </span>
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+              Logística reversa
             </span>
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-4 sm:grid-cols-3">
@@ -173,18 +178,25 @@ export function FeaturedProducts({
   description,
   products,
   accent = "light",
+  flushTopOnMobile = false,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   products: Product[];
   accent?: "light" | "dark";
+  /** Encosta no bloco anterior no mobile (ex.: apos o carrossel da home). */
+  flushTopOnMobile?: boolean;
 }) {
   const dark = accent === "dark";
 
   return (
     <section
-      className={`mx-auto mt-10 w-full max-w-7xl rounded-[1.5rem] px-4 py-8 sm:mt-18 sm:px-6 sm:py-12 lg:px-8 ${
+      className={`mx-auto w-full max-w-7xl rounded-[1.5rem] px-4 sm:px-6 lg:px-8 ${
+        flushTopOnMobile
+          ? "mt-0 pb-6 pt-3 sm:mt-18 sm:py-12"
+          : "mt-10 py-8 sm:mt-18 sm:py-12"
+      } ${
         dark
           ? "bg-[var(--color-ink)] text-white shadow-[0_28px_80px_rgba(0,0,0,0.18)]"
           : ""

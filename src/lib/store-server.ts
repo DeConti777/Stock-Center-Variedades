@@ -307,6 +307,10 @@ export async function resolveProductsForCart(items: CartItem[]) {
             (product as { flashSaleDiscountPercent?: number | null })
               .flashSaleDiscountPercent ??
             null,
+          packageWidthCm: product.packageWidthCm ?? null,
+          packageHeightCm: product.packageHeightCm ?? null,
+          packageLengthCm: product.packageLengthCm ?? null,
+          packageWeightKg: product.packageWeightKg ?? null,
         } satisfies Product),
       ]),
     );
@@ -519,7 +523,7 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
         customerPhone: input.shipping.phone,
         customerCpf: input.shipping.cpf,
         fulfillmentType: fulfillment,
-        shippingCode: shippingQuote.shippingServiceId,
+        melhorEnvioServiceId: shippingQuote.shippingServiceId,
         shippingCarrier: shippingQuote.shippingCarrier,
         shippingAddress: shippingAddressJson,
         items: {

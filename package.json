@@ -13,16 +13,26 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx scripts/seed-demo-products.ts --apply",
+    "seed:demo:delete": "tsx scripts/delete-demo-products.ts --apply",
     "db:migrate-data": "tsx scripts/migrate-sqlite-to-postgres.ts",
     "db:promote": "tsx scripts/promote-admin.ts",
-    "test": "node --test --import tsx \"src/lib/**/*.test.ts\""
+    "test": "node --test --import tsx \"src/lib/**/*.test.ts\"",
+    "presentation:build": "node scripts/build-presentation.mjs",
+    "stripe:listen": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stripe-cli.ps1",
+    "stripe:login": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stripe-cli.ps1 login",
+    "stripe:reconcile": "tsx scripts/reconcile-stripe-payment.ts",
+    "test:melhor-envio": "tsx scripts/test-melhor-envio-sync.ts",
+    "validate:melhor-envio": "tsx scripts/validate-melhor-envio-token.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.79",
     "@auth/prisma-adapter": "^2.11.2",
     "@prisma/client": "^5.22.0",
+    "ai": "^6.0.191",
     "bcryptjs": "^3.0.3",
     "next": "16.2.4",
     "next-auth": "^5.0.0-beta.31",
@@ -35,13 +45,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^11.10.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "16.2.4",
+    "pptxgenjs": "^4.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"

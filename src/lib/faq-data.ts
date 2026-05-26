@@ -7,6 +7,12 @@ export type FaqItem = {
 
 export const faqItems: FaqItem[] = [
   {
+    id: "logistica-reversa",
+    question: "O que é logistica reversa?",
+    answer:
+      "É o fluxo que devolve produtos ao estoque após devolução, troca ou remessa de parceiros. Na Stock Center, conferimos procedência e condição antes de revender.\n\nCom isso, conseguimos oferecer variedade com preços mais baixos que o varejo tradicional, sempre com descrição clara do item.",
+  },
+  {
     id: "pagamento",
     question: "Quais formas de pagamento aceitam?",
     answer:

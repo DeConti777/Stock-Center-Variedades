@@ -20,12 +20,7 @@ export default async function CatalogPage() {
         </div>
       }
     >
-      <ProductCatalogView
-        products={products}
-        filters={getCatalogFilters()}
-        title="Catalogo completo para vender com volume e margem"
-        description="Filtre por categoria, promocoes e faixa de preco. Encontre rapido o que procura e compre com seguranca."
-      />
+      <ProductCatalogView products={products} filters={getCatalogFilters()} />
     </Suspense>
   );
 }

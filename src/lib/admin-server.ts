@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import {
-  dedupeImageUrlsExact,
   parseStringArray,
   stringifyStringArray,
 } from "@/lib/product-json";
@@ -13,12 +12,51 @@ import {
   expireStaleFlashSales,
   fetchFlashSaleDiscountMap,
 } from "@/lib/prisma-product-map";
+import {
+  maybeEnrichPackageOnCreate,
+  type PackageEstimateResult,
+} from "@/lib/package-dimensions-ai";
+import { clampPackageCm, clampPackageKg } from "@/lib/package-dimensions";
 
 function isMissingFlashSaleDiscountFieldError(error: unknown): boolean {
   return (
     error instanceof Error &&
     error.message.includes("flashSaleDiscountPercent")
   );
+}
+
+type PackageDbPatch = {
+  packageWidthCm: number | null;
+  packageHeightCm: number | null;
+  packageLengthCm: number | null;
+  packageWeightKg: number | null;
+};
+
+function normalizePackageDbPatch(input: {
+  packageWidthCm?: number | null;
+  packageHeightCm?: number | null;
+  packageLengthCm?: number | null;
+  packageWeightKg?: number | null;
+}): PackageDbPatch | undefined {
+  if (
+    input.packageWidthCm === undefined &&
+    input.packageHeightCm === undefined &&
+    input.packageLengthCm === undefined &&
+    input.packageWeightKg === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    packageWidthCm:
+      input.packageWidthCm != null ? clampPackageCm(input.packageWidthCm) : null,
+    packageHeightCm:
+      input.packageHeightCm != null ? clampPackageCm(input.packageHeightCm) : null,
+    packageLengthCm:
+      input.packageLengthCm != null ? clampPackageCm(input.packageLengthCm) : null,
+    packageWeightKg:
+      input.packageWeightKg != null ? clampPackageKg(input.packageWeightKg) : null,
+  };
 }
 
 type DbClient = NonNullable<ReturnType<typeof getPrismaOrNull>>;
@@ -72,6 +110,10 @@ export function dbProductToProduct(product: PrismaProduct): ProductType {
     published: product.published,
     flashSaleEndsAt: product.flashSaleEndsAt?.toISOString() ?? null,
     flashSaleDiscountPercent: product.flashSaleDiscountPercent ?? null,
+    packageWidthCm: product.packageWidthCm ?? null,
+    packageHeightCm: product.packageHeightCm ?? null,
+    packageLengthCm: product.packageLengthCm ?? null,
+    packageWeightKg: product.packageWeightKg ?? null,
   };
 }
 
@@ -84,7 +126,7 @@ export async function listAdminProducts(): Promise<ProductType[]> {
 
   await expireStaleFlashSales(prisma);
   const products = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
-  const mapped = products.map(dbProductToProduct);
+  const mapped = products.map((row) => dbProductToProduct(row));
   const discountById = await fetchFlashSaleDiscountMap(
     prisma,
     mapped.map((p) => p.id),
@@ -94,89 +136,6 @@ export async function listAdminProducts(): Promise<ProductType[]> {
     flashSaleDiscountPercent:
       discountById.get(product.id) ?? product.flashSaleDiscountPercent ?? null,
   }));
-}
-
-export type DedupeGlobalImagesResult = {
-  productsUpdated: number;
-  galleryUrlsRemoved: number;
-  coversCleared: number;
-};
-
-/**
- * Each image URL (cover + gallery) may appear at most once in the whole catalog.
- * Products are processed oldest-first (`createdAt`, then `id`); later duplicates lose the URL.
- */
-export async function dedupeProductImageUrlsGlobally(): Promise<DedupeGlobalImagesResult> {
-  const prisma = getPrismaOrNull();
-
-  if (!prisma) {
-    throw new Error("Banco de dados nao configurado.");
-  }
-
-  const rows = await prisma.product.findMany({
-    select: { id: true, coverImage: true, images: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
-
-  const seen = new Set<string>();
-  let productsUpdated = 0;
-  let galleryUrlsRemoved = 0;
-  let coversCleared = 0;
-
-  for (const row of rows) {
-    const prevImagesJson = row.images;
-    const trimmedCover =
-      row.coverImage != null && String(row.coverImage).trim() !== ""
-        ? String(row.coverImage).trim()
-        : null;
-
-    const galleryLocal = dedupeImageUrlsExact(parseStringArray(prevImagesJson));
-
-    let newCover: string | null = trimmedCover;
-    if (trimmedCover) {
-      if (seen.has(trimmedCover)) {
-        newCover = null;
-        coversCleared += 1;
-      } else {
-        seen.add(trimmedCover);
-      }
-    }
-
-    const newGallery: string[] = [];
-    for (const url of galleryLocal) {
-      if (seen.has(url)) {
-        galleryUrlsRemoved += 1;
-      } else {
-        seen.add(url);
-        newGallery.push(url);
-      }
-    }
-
-    const nextImagesJson = stringifyStringArray(newGallery);
-    const normalizedStoredCover =
-      row.coverImage != null && String(row.coverImage).trim() !== ""
-        ? String(row.coverImage).trim()
-        : null;
-    const coverChanged = (newCover ?? null) !== (normalizedStoredCover ?? null);
-    const imagesChanged = nextImagesJson !== prevImagesJson;
-
-    if (coverChanged || imagesChanged) {
-      await prisma.product.update({
-        where: { id: row.id },
-        data: {
-          coverImage: newCover,
-          images: nextImagesJson,
-        },
-      });
-      productsUpdated += 1;
-    }
-  }
-
-  return {
-    productsUpdated,
-    galleryUrlsRemoved,
-    coversCleared,
-  };
 }
 
 export type AdminProductCreateInput = {
@@ -205,16 +164,31 @@ export type AdminProductCreateInput = {
   flashSaleActive?: boolean;
   /** 1–99 exibido na vitrine durante a oferta; ignorado se sem oferta relâmpago. */
   flashSaleDiscountPercent?: number | null;
+  packageWidthCm?: number | null;
+  packageHeightCm?: number | null;
+  packageLengthCm?: number | null;
+  packageWeightKg?: number | null;
 };
 
 export type AdminProductUpdateInput = Partial<AdminProductCreateInput>;
 
-export async function createAdminProduct(input: AdminProductCreateInput): Promise<ProductType> {
+export type AdminProductCreateResult = {
+  product: ProductType;
+  packageAiEstimate?: PackageEstimateResult;
+};
+
+export async function createAdminProduct(
+  input: AdminProductCreateInput,
+): Promise<AdminProductCreateResult> {
   const prisma = getPrismaOrNull();
 
   if (!prisma) {
     throw new Error("Banco de dados nao configurado.");
   }
+
+  const { input: enrichedInput, estimate: packageAiEstimate } =
+    await maybeEnrichPackageOnCreate(input);
+  input = enrichedInput;
 
   const flashEndsAt = resolveFlashSaleEndsAt(null, input.flashSaleActive ?? false);
   const pIn = input.flashSaleDiscountPercent;
@@ -257,12 +231,15 @@ export async function createAdminProduct(input: AdminProductCreateInput): Promis
     flashSaleEndsAt: flashEndsAt,
   } as const;
 
+  const packagePatch = normalizePackageDbPatch(input);
+
   let product: PrismaProduct;
   try {
     product = await prisma.product.create({
       data: {
         ...baseData,
         flashSaleDiscountPercent: flashPct,
+        ...(packagePatch ?? {}),
       },
     });
   } catch (error) {
@@ -270,14 +247,20 @@ export async function createAdminProduct(input: AdminProductCreateInput): Promis
       throw error;
     }
     product = await prisma.product.create({
-      data: baseData,
+      data: {
+        ...baseData,
+        ...(packagePatch ?? {}),
+      },
     });
     if (flashPct !== null) {
       await persistFlashSaleDiscountPercentRaw(prisma, product.id, flashPct);
     }
   }
 
-  return dbProductToProduct(product);
+  return {
+    product: dbProductToProduct(product),
+    packageAiEstimate,
+  };
 }
 
 export async function updateAdminProduct(
@@ -324,6 +307,8 @@ export async function updateAdminProduct(
   if (input.tags !== undefined) updateData.tags = stringifyStringArray(input.tags);
   if (input.published !== undefined) updateData.published = input.published;
 
+  const packagePatch = normalizePackageDbPatch(input);
+
   if (input.flashSaleActive !== undefined) {
     const existing = await prisma.product.findUnique({
       where: { id: productId },
@@ -354,6 +339,10 @@ export async function updateAdminProduct(
         ? input.flashSaleDiscountPercent
         : undefined;
 
+  if (packagePatch) {
+    Object.assign(updateData, packagePatch);
+  }
+
   let product: PrismaProduct;
   try {
     product = await prisma.product.update({
@@ -361,22 +350,23 @@ export async function updateAdminProduct(
       data: updateData,
     });
   } catch (error) {
-    if (!isMissingFlashSaleDiscountFieldError(error)) {
+    if (isMissingFlashSaleDiscountFieldError(error)) {
+      const fallbackData = { ...updateData };
+      delete (fallbackData as { flashSaleDiscountPercent?: unknown })
+        .flashSaleDiscountPercent;
+      product = await prisma.product.update({
+        where: { id: productId },
+        data: fallbackData,
+      });
+      if (desiredFlashSalePercent !== undefined) {
+        await persistFlashSaleDiscountPercentRaw(
+          prisma,
+          productId,
+          desiredFlashSalePercent,
+        );
+      }
+    } else {
       throw error;
-    }
-    const fallbackData = { ...updateData };
-    delete (fallbackData as { flashSaleDiscountPercent?: unknown })
-      .flashSaleDiscountPercent;
-    product = await prisma.product.update({
-      where: { id: productId },
-      data: fallbackData,
-    });
-    if (desiredFlashSalePercent !== undefined) {
-      await persistFlashSaleDiscountPercentRaw(
-        prisma,
-        productId,
-        desiredFlashSalePercent,
-      );
     }
   }
 
@@ -405,6 +395,10 @@ export type AdminOrder = {
   pickupCode?: string | null;
   shippingCode?: string;
   shippingCarrier?: string;
+  melhorEnvioServiceId?: string | null;
+  melhorEnvioShipmentId?: string | null;
+  melhorEnvioStatus?: string | null;
+  melhorEnvioError?: string | null;
   trackingUrl?: string;
   invoiceUrl?: string;
   createdAt: Date;
@@ -439,6 +433,10 @@ export async function listAdminOrders(): Promise<AdminOrder[]> {
     pickupCode: order.pickupCode,
     shippingCode: order.shippingCode ?? undefined,
     shippingCarrier: order.shippingCarrier ?? undefined,
+    melhorEnvioServiceId: order.melhorEnvioServiceId,
+    melhorEnvioShipmentId: order.melhorEnvioShipmentId,
+    melhorEnvioStatus: order.melhorEnvioStatus,
+    melhorEnvioError: order.melhorEnvioError,
     trackingUrl: order.trackingUrl ?? undefined,
     invoiceUrl: order.invoiceUrl ?? undefined,
     createdAt: order.createdAt,

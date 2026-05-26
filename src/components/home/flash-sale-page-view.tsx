@@ -91,7 +91,7 @@ export function FlashSalePageView({ products }: { products: Product[] }) {
           </Link>
         </section>
       ) : (
-        <section className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <section className="product-grid-mobile mt-8 grid gap-2 md:grid-cols-3 md:gap-5 xl:grid-cols-4">
           {deals.map((product) => {
             const href = `/produto/${product.slug}`;
             const imageSrc = getProductImageUrl(product, 0);

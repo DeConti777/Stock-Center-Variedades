@@ -51,6 +51,38 @@ export async function getFeaturedProducts() {
   return products.filter((product) => product.tags.includes("featured"));
 }
 
+const byDemandDesc = (a: Product, b: Product) => {
+  if (b.reviews !== a.reviews) return b.reviews - a.reviews;
+  return b.rating - a.rating;
+};
+
+/** Sugestoes para carrinho vazio (e vitrines similares). */
+export async function getCartRecommendedProducts(limit = 18) {
+  const products = await getProducts();
+  const inStock = products.filter((product) => product.stock > 0);
+  const seen = new Set<string>();
+  const pool: Product[] = [];
+
+  const addMany = (list: Product[]) => {
+    for (const product of list) {
+      if (seen.has(product.id)) continue;
+      seen.add(product.id);
+      pool.push(product);
+    }
+  };
+
+  addMany(inStock.filter((product) => product.tags.includes("featured")));
+  addMany(
+    inStock.filter(
+      (product) =>
+        product.tags.includes("bestSeller") || product.tags.includes("promotion"),
+    ),
+  );
+  addMany([...inStock].sort(byDemandDesc));
+
+  return pool.slice(0, limit);
+}
+
 export async function getProductsByTag(tag: ProductTag) {
   const products = await getProducts();
   return products.filter((product) => product.tags.includes(tag));
@@ -68,11 +100,6 @@ export async function getRelatedProducts(productId: string, limit = 4) {
   if (!product) {
     return [];
   }
-
-  const byDemandDesc = (a: Product, b: Product) => {
-    if (b.reviews !== a.reviews) return b.reviews - a.reviews;
-    return b.rating - a.rating;
-  };
 
   const sameCategory = products
     .filter(

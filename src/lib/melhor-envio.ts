@@ -47,7 +47,7 @@ function parsePriceToReais(value: string | undefined): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-function melhorEnvioBaseUrl() {
+export function melhorEnvioBaseUrl() {
   const raw = process.env.MELHOR_ENVIO_API_BASE_URL?.trim();
   if (raw) return raw.replace(/\/$/, "");
   return process.env.MELHOR_ENVIO_USE_SANDBOX === "true"
@@ -106,8 +106,8 @@ export async function calculateMelhorEnvioShipment(params: {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 18_000);
 
-  try {
-    const res = await fetch(`${melhorEnvioBaseUrl()}/api/v2/me/shipment/calculate`, {
+  async function fetchCalculate(baseUrl: string) {
+    return fetch(`${baseUrl}/api/v2/me/shipment/calculate`, {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -118,6 +118,19 @@ export async function calculateMelhorEnvioShipment(params: {
       },
       body: JSON.stringify(body),
     });
+  }
+
+  try {
+    const primaryBase = melhorEnvioBaseUrl();
+    let res = await fetchCalculate(primaryBase);
+
+    if (
+      res.status === 401 &&
+      primaryBase.includes("sandbox") &&
+      process.env.MELHOR_ENVIO_USE_SANDBOX === "true"
+    ) {
+      res = await fetchCalculate("https://melhorenvio.com.br");
+    }
 
     if (!res.ok) {
       return null;

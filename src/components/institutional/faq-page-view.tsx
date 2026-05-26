@@ -1,3 +1,4 @@
+import { PageHighlight } from "@/components/ui/page-highlight";
 import { faqItems } from "@/lib/faq-data";
 
 function AnswerBlocks({ faqId, text }: { faqId: string; text: string }) {
@@ -14,18 +15,12 @@ function AnswerBlocks({ faqId, text }: { faqId: string; text: string }) {
 export function FaqPageView() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8">
-      <header className="rounded-[1.75rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Ajuda
-        </p>
-        <h1 className="mt-3 font-display text-3xl font-black tracking-tight sm:mt-4 sm:text-5xl">
-          Perguntas frequentes
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-white/75 sm:mt-4 sm:text-base sm:leading-7">
-          Respostas objetivas sobre pagamento, envio, trocas e atendimento. Para casos
-          especificos, use o WhatsApp ou o formulario de contato.
-        </p>
-      </header>
+      <PageHighlight
+        as="header"
+        eyebrow="Ajuda"
+        title="Perguntas frequentes"
+        description="Entenda nossos precos com logistica reversa e tire duvidas sobre pagamento, envio, trocas e atendimento. Para casos especificos, use o WhatsApp ou o formulario de contato."
+      />
 
       <div className="space-y-3">
         {faqItems.map((item) => (

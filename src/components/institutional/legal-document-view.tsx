@@ -1,3 +1,5 @@
+import { PageHighlight } from "@/components/ui/page-highlight";
+
 export type LegalDocumentKind = "privacy" | "terms" | "returns";
 
 const meta: Record<
@@ -188,15 +190,13 @@ export function LegalDocumentView({ kind }: { kind: LegalDocumentKind }) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <header className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-7 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-12">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          {m.eyebrow}
-        </p>
-        <h1 className="mt-4 max-w-4xl font-display text-4xl font-black tracking-tight sm:text-5xl">
-          {m.title}
-        </h1>
-        <p className="mt-6 max-w-2xl text-base leading-8 text-white/75">{m.lead}</p>
-      </header>
+      <PageHighlight
+        as="header"
+        className="sm:py-12"
+        eyebrow={m.eyebrow}
+        title={m.title}
+        description={m.lead}
+      />
       <article className="max-w-3xl space-y-10 rounded-[2rem] border border-[var(--color-line)] bg-white p-8 sm:p-10">
         {kind === "privacy" ? <PrivacyBody /> : null}
         {kind === "terms" ? <TermsBody /> : null}

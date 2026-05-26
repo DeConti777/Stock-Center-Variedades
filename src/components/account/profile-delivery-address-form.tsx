@@ -71,15 +71,7 @@ export function ProfileDeliveryAddressForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const initialSnapshot = useMemo(() => JSON.stringify(initial), [
-    initial.cep,
-    initial.city,
-    initial.complement,
-    initial.neighborhood,
-    initial.number,
-    initial.state,
-    initial.street,
-  ]);
+  const initialSnapshot = useMemo(() => JSON.stringify(initial), [initial]);
 
   useEffect(() => {
     const snap = JSON.parse(initialSnapshot) as Initial;

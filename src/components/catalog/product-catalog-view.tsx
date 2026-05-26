@@ -1,26 +1,24 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProductSearchField } from "@/components/search/product-search-field";
+import { PageHighlight } from "@/components/ui/page-highlight";
 import { ProductCard } from "@/components/ui/product-card";
 import { useStore } from "@/components/store/store-provider";
 import { prioritizeVisitedProducts } from "@/lib/catalog";
 import { isFlashSaleActive } from "@/lib/flash-sale";
-import { searchProducts } from "@/lib/search";
+import { searchAndRankProducts } from "@/lib/search";
 import type { CatalogFilters, Product } from "@/lib/types";
 
 type ProductCatalogViewProps = {
   products: Product[];
   filters: CatalogFilters;
-  title: string;
-  description: string;
 };
 
 export function ProductCatalogView({
   products,
   filters,
-  title,
-  description,
 }: ProductCatalogViewProps) {
   const { visitedProductIds } = useStore();
   const router = useRouter();
@@ -33,6 +31,34 @@ export function ProductCatalogView({
   useEffect(() => {
     setQuery(qFromUrl);
   }, [qFromUrl]);
+
+  const syncQueryToUrl = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      const trimmed = value.trim();
+      if (trimmed) {
+        next.set("q", trimmed);
+      } else {
+        next.delete("q");
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (query === qFromUrl) return;
+    const timer = window.setTimeout(() => {
+      syncQueryToUrl(query);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query, qFromUrl, syncQueryToUrl]);
+
+  const clearSearch = useCallback(() => {
+    setQuery("");
+    syncQueryToUrl("");
+  }, [syncQueryToUrl]);
 
   const selectedCategory = useMemo(() => {
     if (!categoriaFromUrl) return "Todas";
@@ -61,10 +87,13 @@ export function ProductCatalogView({
     setFlashSaleOnly(value === "1" || value === "true");
   }, [searchParams]);
 
-  const visibleProducts = useMemo(() => {
-    let current = searchProducts(products, query);
+  const trimmedQuery = query.trim();
 
-    // Filtrar produtos com estoque 0 ou negativo
+  const visibleProducts = useMemo(() => {
+    let current = trimmedQuery
+      ? searchAndRankProducts(products, query)
+      : [...products];
+
     current = current.filter((product) => product.stock > 0);
 
     if (selectedCategory !== "Todas") {
@@ -100,6 +129,10 @@ export function ProductCatalogView({
       current = [...current].sort((a, b) => b.reviews - a.reviews);
     }
 
+    if (trimmedQuery) {
+      return current;
+    }
+
     return prioritizeVisitedProducts(current, visitedProductIds);
   }, [
     filters.priceRanges,
@@ -110,24 +143,18 @@ export function ProductCatalogView({
     selectedCategory,
     selectedPriceRange,
     sort,
+    trimmedQuery,
     visitedProductIds,
   ]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Busca inteligente
-        </p>
-        <h1 className="mt-3 max-w-3xl font-display text-3xl font-black tracking-tight sm:mt-4 sm:text-5xl">
-          {title}
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-white/75 sm:mt-4 sm:text-base sm:leading-7">
-          {description}
-        </p>
-      </div>
+      <PageHighlight
+        title="Catalogo Completo"
+        description="Tudo que você precisa em um único lugar"
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <button
           type="button"
           onClick={() => setShowFiltersMobile((current) => !current)}
@@ -136,25 +163,35 @@ export function ProductCatalogView({
           {showFiltersMobile ? "Ocultar filtros" : "Filtrar produtos"}
         </button>
 
-        <aside
-          className={`rounded-[2rem] border border-[var(--color-line)] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] ${
+        <div
+          className={`w-full shrink-0 lg:w-[300px] ${
             showFiltersMobile ? "block" : "hidden lg:block"
-          }`}
+          } lg:sticky lg:top-32 lg:z-20 lg:self-start`}
         >
+        <aside className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
           <h2 className="font-display text-2xl font-bold text-[var(--color-ink)]">
             Filtrar produtos
           </h2>
           <div className="mt-6 space-y-5">
             <div>
-              <label className="text-sm font-semibold text-[var(--color-ink)]">
+              <label
+                htmlFor="catalog-sidebar-search"
+                className="text-sm font-semibold text-[var(--color-ink)]"
+              >
                 Busca
               </label>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Busque por produto, categoria ou descricao"
-                className="mt-2 w-full rounded-2xl border border-[var(--color-line)] px-4 py-3 text-sm outline-none"
-              />
+              <div className="mt-2">
+                <ProductSearchField
+                  variant="catalog"
+                  defaultQuery={query}
+                  inputId="catalog-sidebar-search"
+                  onQueryChange={setQuery}
+                  onSubmit={(value) => {
+                    setQuery(value);
+                    syncQueryToUrl(value);
+                  }}
+                />
+              </div>
             </div>
             <div>
               <label className="text-sm font-semibold text-[var(--color-ink)]">
@@ -236,8 +273,9 @@ export function ProductCatalogView({
             </button>
           </div>
         </aside>
+        </div>
 
-        <section>
+        <section className="min-w-0 flex-1">
           <div className="mb-5 flex flex-col gap-3 rounded-[2rem] border border-[var(--color-line)] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-[var(--color-muted)]">
               {visibleProducts.length} produtos encontrados
@@ -260,11 +298,31 @@ export function ProductCatalogView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-2 md:gap-5 xl:grid-cols-3">
-            {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {visibleProducts.length === 0 ? (
+            <div className="rounded-[2rem] border border-dashed border-[var(--color-line)] bg-white px-6 py-12 text-center">
+              <p className="font-display text-xl font-bold text-[var(--color-ink)]">
+                Nenhum produto encontrado
+              </p>
+              <p className="mt-2 text-sm text-[var(--color-muted)]">
+                Tente outro termo de busca ou remova alguns filtros para ver mais resultados.
+              </p>
+              {trimmedQuery ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="mt-6 inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-2.5 text-sm font-bold text-white"
+                >
+                  Limpar busca
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="product-grid-mobile grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-3">
+              {visibleProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </div>

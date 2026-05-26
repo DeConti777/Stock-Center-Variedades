@@ -11,6 +11,7 @@ import { AdminReports } from "@/components/admin/admin-reports";
 import { AdminOrdersManager } from "@/components/admin/admin-orders-manager";
 import { AdminCouponsManager } from "@/components/admin/admin-coupons-manager";
 import { AdminCollapsibleSection } from "@/components/admin/admin-collapsible-section";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 export async function AdminPageView() {
   const [salesData, bestSellers, salesByCategory, dashboardMetrics, financialReport] =
@@ -24,14 +25,45 @@ export async function AdminPageView() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Painel administrativo simples
-        </p>
-        <h1 className="mt-4 max-w-4xl font-display text-3xl font-black tracking-tight sm:text-5xl">
-          Operacao pronta para acompanhar estoque, campanhas e pedidos.
-        </h1>
-      </div>
+      <PageHighlight
+        eyebrow="Painel administrativo simples"
+        title="Operacao pronta para acompanhar estoque, campanhas e pedidos."
+      />
+      <nav
+        aria-label="Atalhos do admin"
+        className="sticky top-[4.9rem] z-20 -mt-3 flex snap-x gap-2 overflow-x-auto pb-1 lg:top-[5.6rem]"
+      >
+        <a
+          href="#admin-gestao-pedidos"
+          className="touch-target-mobile inline-flex shrink-0 snap-start items-center rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--color-ink)]"
+        >
+          Pedidos
+        </a>
+        <a
+          href="#admin-cupons"
+          className="touch-target-mobile inline-flex shrink-0 snap-start items-center rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--color-ink)]"
+        >
+          Cupons
+        </a>
+        <a
+          href="#admin-gestao-vendas"
+          className="touch-target-mobile inline-flex shrink-0 snap-start items-center rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--color-ink)]"
+        >
+          Vendas
+        </a>
+        <a
+          href="#admin-relatorios"
+          className="touch-target-mobile inline-flex shrink-0 snap-start items-center rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--color-ink)]"
+        >
+          Relatorios
+        </a>
+        <a
+          href="#admin-gerenciamento-produtos"
+          className="touch-target-mobile inline-flex shrink-0 snap-start items-center rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--color-ink)]"
+        >
+          Produtos
+        </a>
+      </nav>
       <div className="grid gap-5 lg:grid-cols-4">
         {dashboardMetrics.map((metric) => {
           const body = (
@@ -105,6 +137,7 @@ export async function AdminPageView() {
         <AdminOrdersManager embedded />
       </AdminCollapsibleSection>
       <AdminCollapsibleSection
+        id="admin-cupons"
         title="Cupons"
         description="Crie cupons percentuais ou de valor fixo com validade, limite de uso e pedido minimo."
       >
@@ -122,6 +155,7 @@ export async function AdminPageView() {
         />
       </AdminCollapsibleSection>
       <AdminCollapsibleSection
+        id="admin-relatorios"
         title="Relatorios"
         description="Numeros em pedidos pagos, em processamento, enviados ou entregues. Cadastre o custo (CMV) em cada produto para o lucro e a margem refletirem a realidade."
         defaultCollapsed

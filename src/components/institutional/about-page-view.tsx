@@ -1,16 +1,15 @@
+import { PageHighlight } from "@/components/ui/page-highlight";
 import { institutionalStats } from "@/lib/site-data";
 
 export function AboutPageView() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <section className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-12">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Sobre nos
-        </p>
-        <h1 className="mt-3 max-w-4xl font-display text-3xl font-black tracking-tight sm:mt-4 sm:text-5xl">
-          A Stock Center Variedades nasceu para unir variedade, promocao e confianca em um so lugar.
-        </h1>
-      </section>
+      <PageHighlight
+        as="section"
+        className="sm:py-12"
+        eyebrow="Sobre nos"
+        title="A Stock Center Variedades nasceu para unir variedade, promocao e confianca em um so lugar."
+      />
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr] lg:gap-6">
         <article className="rounded-[1.6rem] border border-[var(--color-line)] bg-white p-5 sm:rounded-[2rem] sm:p-6">
           <h2 className="font-display text-xl font-bold text-[var(--color-ink)] sm:text-2xl">

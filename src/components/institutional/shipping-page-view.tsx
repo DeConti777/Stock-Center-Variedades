@@ -1,20 +1,15 @@
 import Link from "next/link";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 export function ShippingPageView() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8">
-      <header className="rounded-[2rem] bg-[var(--color-ink)] px-6 py-10 text-white sm:px-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Logistica
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Envio, prazos e cotacao de frete
-        </h1>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-white/75">
-          Entenda como preparamos seu pedido, como cotamos o frete no site e onde acompanhar a
-          entrega. Para situacoes especificas, nosso time ajuda pelo WhatsApp.
-        </p>
-      </header>
+      <PageHighlight
+        as="header"
+        eyebrow="Logistica"
+        title="Envio, prazos e cotacao de frete"
+        description="Entenda como preparamos seu pedido, como cotamos o frete no site e onde acompanhar a entrega. Para situacoes especificas, nosso time ajuda pelo WhatsApp."
+      />
 
       <article className="space-y-10 rounded-[2rem] border border-[var(--color-line)] bg-white p-6 sm:p-10">
         <section className="space-y-4">

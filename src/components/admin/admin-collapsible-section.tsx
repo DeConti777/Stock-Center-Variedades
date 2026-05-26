@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { IconChevronDown } from "@/components/admin/admin-mobile-ui";
 
 type AdminCollapsibleSectionProps = {
   id?: string;
@@ -35,9 +36,12 @@ export function AdminCollapsibleSection({
         <button
           type="button"
           onClick={() => setCollapsed((current) => !current)}
-          className="touch-target-mobile shrink-0 rounded-full border border-[var(--color-line)] px-5 py-2 text-sm font-bold text-[var(--color-ink)] hover:bg-[var(--color-surface)]"
+          className="touch-target-mobile inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--color-line)] px-4 py-2 text-sm font-bold text-[var(--color-ink)] hover:bg-[var(--color-surface)]"
           aria-expanded={!collapsed}
         >
+          <IconChevronDown
+            className={`h-4 w-4 transition-transform ${collapsed ? "" : "rotate-180"}`}
+          />
           {collapsed ? "Expandir" : "Minimizar"}
         </button>
       </div>

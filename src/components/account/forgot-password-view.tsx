@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 export function ForgotPasswordView() {
   const router = useRouter();
@@ -137,18 +138,13 @@ export function ForgotPasswordView() {
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8">
-      <section className="rounded-[2rem] bg-[var(--color-ink)] p-6 text-white sm:rounded-[2.5rem] sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Recuperacao de acesso
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight">
-          Esqueceu sua senha?
-        </h1>
-        <p className="mt-5 text-base leading-8 text-white/75">
-          Faca a verificacao em duas etapas: enviamos um codigo para o e-mail
-          informado e, depois, voce cria uma nova senha.
-        </p>
-      </section>
+      <PageHighlight
+        as="section"
+        eyebrow="Recuperacao de acesso"
+        title="Esqueceu sua senha?"
+        description="Faca a verificacao em duas etapas: enviamos um codigo para o e-mail informado e, depois, voce cria uma nova senha."
+        className="h-full"
+      />
 
       <div className="rounded-[2.5rem] border border-[var(--color-line)] bg-white p-8">
         <h2 className="font-display text-2xl font-bold text-[var(--color-ink)]">

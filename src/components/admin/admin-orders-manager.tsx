@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { getOrderStatusLabel } from "@/lib/order-status";
+import {
+  adminActionButtonClass,
+  IconRefresh,
+  IconSave,
+} from "@/components/admin/admin-mobile-ui";
 
 type AdminOrder = {
   id: string;
@@ -14,6 +19,10 @@ type AdminOrder = {
   customerEmail: string;
   shippingCode?: string;
   shippingCarrier?: string;
+  melhorEnvioServiceId?: string | null;
+  melhorEnvioShipmentId?: string | null;
+  melhorEnvioStatus?: string | null;
+  melhorEnvioError?: string | null;
   trackingUrl?: string;
   invoiceUrl?: string;
   createdAt: string;
@@ -81,6 +90,7 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
   const [drafts, setDrafts] = useState<Record<string, OrderDraft>>({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [melhorEnvioId, setMelhorEnvioId] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -107,6 +117,30 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
   useEffect(() => {
     void loadOrders();
   }, []);
+
+  async function syncMelhorEnvio(orderId: string) {
+    setMelhorEnvioId(orderId);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}/melhor-envio`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || payload?.reason || "Falha ao enviar para Melhor Envio.",
+        );
+      }
+      setMessage(payload?.message || "Melhor Envio atualizado.");
+      await loadOrders();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Erro ao sincronizar Melhor Envio.",
+      );
+    } finally {
+      setMelhorEnvioId(null);
+    }
+  }
 
   async function saveOrder(orderId: string) {
     const draft = drafts[orderId];
@@ -232,16 +266,18 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
             type="button"
             onClick={() => void saveAllDirty()}
             disabled={savingAll || savingId !== null || loading}
-            className="touch-target-mobile col-span-2 rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-white disabled:opacity-50 sm:col-span-1"
+            className={`${adminActionButtonClass({ tone: "primary", compact: true })} col-span-2 sm:col-span-1`}
           >
+            <IconSave className="h-4 w-4" />
             {savingAll ? "Salvando todos..." : "Salvar todas alteracoes"}
           </button>
           <button
             type="button"
             onClick={() => void loadOrders()}
             disabled={savingAll || savingId !== null}
-            className="touch-target-mobile rounded-full border border-[var(--color-line)] px-5 py-2 text-sm font-bold text-[var(--color-ink)] disabled:opacity-50"
+            className={adminActionButtonClass({ compact: true })}
           >
+            <IconRefresh className="h-4 w-4" />
             Atualizar
           </button>
         </div>
@@ -303,6 +339,35 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                   </option>
                 ))}
               </select>
+              {order.fulfillmentType === "SHIP" ? (
+                <div className="mt-3 rounded-2xl border border-[var(--color-line)] bg-white/80 px-3 py-2 text-xs text-[var(--color-muted)]">
+                  <p>
+                    ME:{" "}
+                    <span className="font-semibold text-[var(--color-ink)]">
+                      {order.melhorEnvioStatus || "—"}
+                    </span>
+                  </p>
+                  {order.melhorEnvioShipmentId ? (
+                    <p className="mt-1 font-mono text-[0.65rem]">
+                      {order.melhorEnvioShipmentId.slice(0, 12)}…
+                    </p>
+                  ) : null}
+                  {order.melhorEnvioError ? (
+                    <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
+                  ) : null}
+                  {["PAID", "PROCESSING", "SHIPPED", "DELIVERED"].includes(order.status) &&
+                  order.melhorEnvioStatus !== "PURCHASED" ? (
+                    <button
+                      type="button"
+                      onClick={() => void syncMelhorEnvio(order.id)}
+                      disabled={melhorEnvioId === order.id || savingAll}
+                      className={`${adminActionButtonClass({ compact: true })} mt-2 w-full`}
+                    >
+                      {melhorEnvioId === order.id ? "Enviando..." : "Enviar ao Melhor Envio"}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-3 grid gap-2">
                 <input
                   value={draft.shippingCarrier}
@@ -333,8 +398,9 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                 type="button"
                 onClick={() => void saveOrder(order.id)}
                 disabled={savingId === order.id || savingAll}
-                className="touch-target-mobile mt-3 inline-flex w-full items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-bold text-white disabled:opacity-60"
+                className={`${adminActionButtonClass({ tone: "primary", compact: true })} mt-3 w-full`}
               >
+                <IconSave className="h-4 w-4" />
                 {savingId === order.id ? "Salvando..." : "Salvar"}
               </button>
             </article>
@@ -412,6 +478,27 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                   </td>
                   <td className="px-4 py-4">
                     <div className="grid min-w-[260px] gap-2">
+                      {order.fulfillmentType === "SHIP" ? (
+                        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-muted)]">
+                          <p>
+                            Melhor Envio:{" "}
+                            <span className="font-semibold text-[var(--color-ink)]">
+                              {order.melhorEnvioStatus || "nao enviado"}
+                            </span>
+                            {order.melhorEnvioServiceId
+                              ? ` · servico ${order.melhorEnvioServiceId}`
+                              : ""}
+                          </p>
+                          {order.melhorEnvioShipmentId ? (
+                            <p className="mt-1 font-mono text-[0.65rem] text-[var(--color-ink)]">
+                              ID: {order.melhorEnvioShipmentId}
+                            </p>
+                          ) : null}
+                          {order.melhorEnvioError ? (
+                            <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <input
                         value={draft.shippingCarrier}
                         disabled={savingAll}
@@ -463,12 +550,25 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                     </div>
                   </td>
                   <td className="px-4 py-4">
+                    {order.fulfillmentType === "SHIP" &&
+                    ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"].includes(order.status) &&
+                    order.melhorEnvioStatus !== "PURCHASED" ? (
+                      <button
+                        type="button"
+                        onClick={() => void syncMelhorEnvio(order.id)}
+                        disabled={melhorEnvioId === order.id || savingAll}
+                        className={`${adminActionButtonClass({ compact: true })} mb-2 w-full`}
+                      >
+                        {melhorEnvioId === order.id ? "ME..." : "Melhor Envio"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void saveOrder(order.id)}
                       disabled={savingId === order.id || savingAll}
-                      className="rounded-full bg-[var(--color-primary)] px-5 py-2 text-xs font-bold text-white disabled:opacity-60"
+                      className={adminActionButtonClass({ tone: "primary", compact: true })}
                     >
+                      <IconSave className="h-4 w-4" />
                       {savingId === order.id ? "Salvando..." : "Salvar"}
                     </button>
                   </td>

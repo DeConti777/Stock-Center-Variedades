@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import {
+  formatAdminProductSaveError,
+  formatZodValidationError,
+  adminPackageFieldsSchema,
+  prepareAdminProductBody,
+} from "@/lib/admin-product-api";
 import { createAdminProduct, deleteAdminProduct, listAdminProducts, updateAdminProduct } from "@/lib/admin-server";
 import { dedupeImageUrlsExact } from "@/lib/product-json";
 import { z } from "zod";
@@ -30,6 +36,7 @@ const createProductSchema = z.object({
   flashSaleDiscountPercent: z
     .union([z.number().int().min(1).max(99), z.null()])
     .optional(),
+  ...adminPackageFieldsSchema,
 });
 
 const updateProductSchema = z.object({
@@ -59,6 +66,7 @@ const updateProductSchema = z.object({
   flashSaleDiscountPercent: z
     .union([z.number().int().min(1).max(99), z.null()])
     .optional(),
+  ...adminPackageFieldsSchema,
 });
 
 const deleteProductSchema = z.object({
@@ -90,24 +98,36 @@ export async function POST(request: Request) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
-  const result = createProductSchema.safeParse(body);
+  try {
+    const raw = (await request.json()) as Record<string, unknown>;
+    const body = prepareAdminProductBody(raw);
+    const result = createProductSchema.safeParse(body);
 
-  if (!result.success) {
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: `Dados invalidos para criar produto. ${formatZodValidationError(result.error)}`,
+          details: result.error.format(),
+        },
+        { status: 400 },
+      );
+    }
+
+    const payload = result.data;
+    const normalized =
+      payload.images !== undefined
+        ? { ...payload, images: dedupeImageUrlsExact(payload.images) }
+        : payload;
+
+    const { product, packageAiEstimate } = await createAdminProduct(normalized);
+    return NextResponse.json({ product, packageAiEstimate });
+  } catch (error) {
+    console.error("[admin/products POST]", error);
     return NextResponse.json(
-      { error: "Dados invalidos para criar produto.", details: result.error.format() },
-      { status: 400 },
+      { error: formatAdminProductSaveError(error) },
+      { status: 500 },
     );
   }
-
-  const payload = result.data;
-  const normalized =
-    payload.images !== undefined
-      ? { ...payload, images: dedupeImageUrlsExact(payload.images) }
-      : payload;
-
-  const product = await createAdminProduct(normalized);
-  return NextResponse.json({ product });
 }
 
 export async function PATCH(request: Request) {
@@ -117,22 +137,34 @@ export async function PATCH(request: Request) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
-  const result = updateProductSchema.safeParse(body);
+  try {
+    const raw = (await request.json()) as Record<string, unknown>;
+    const body = prepareAdminProductBody(raw);
+    const result = updateProductSchema.safeParse(body);
 
-  if (!result.success) {
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: `Dados invalidos para atualizar produto. ${formatZodValidationError(result.error)}`,
+          details: result.error.format(),
+        },
+        { status: 400 },
+      );
+    }
+
+    const { id, images, ...rest } = result.data;
+    const updateData =
+      images !== undefined ? { ...rest, images: dedupeImageUrlsExact(images) } : rest;
+
+    const product = await updateAdminProduct(id, updateData);
+    return NextResponse.json({ product });
+  } catch (error) {
+    console.error("[admin/products PATCH]", error);
     return NextResponse.json(
-      { error: "Dados invalidos para atualizar produto.", details: result.error.format() },
-      { status: 400 },
+      { error: formatAdminProductSaveError(error) },
+      { status: 500 },
     );
   }
-
-  const { id, images, ...rest } = result.data;
-  const updateData =
-    images !== undefined ? { ...rest, images: dedupeImageUrlsExact(images) } : rest;
-
-  const product = await updateAdminProduct(id, updateData);
-  return NextResponse.json({ product });
 }
 
 export async function DELETE(request: Request) {

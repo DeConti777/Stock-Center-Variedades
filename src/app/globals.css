@@ -28,13 +28,14 @@
 html {
   scroll-behavior: smooth;
   max-width: 100%;
-  overflow-x: hidden;
+  /* clip evita barra horizontal sem quebrar position: sticky (hidden quebra em vários browsers) */
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 246, 243, 0.98) 48%, #ffffff 100%),
     linear-gradient(90deg, rgba(201, 151, 40, 0.08), transparent 32%, rgba(201, 151, 40, 0.06)),
@@ -1461,22 +1462,94 @@ textarea {
   }
 
   .product-grid-mobile {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.625rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    background: var(--color-soft);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
   }
 
   .product-grid-mobile > * {
     min-width: 0;
   }
 
+  /* Listagem estilo Mercado Livre: cards compactos em 2 colunas */
+  .product-grid-mobile .premium-card {
+    border-radius: 0.375rem;
+    border-color: var(--color-line);
+    box-shadow: none;
+    transform: none !important;
+  }
+
+  .product-grid-mobile .premium-card:hover {
+    border-color: var(--color-line);
+    box-shadow: none;
+  }
+
+  .product-grid-mobile .product-card-media-wrap {
+    padding: 0.25rem;
+  }
+
+  .product-grid-mobile .product-card-body {
+    padding: 0.5rem;
+    padding-top: 0.25rem;
+  }
+
+  .product-grid-mobile .product-card-media {
+    aspect-ratio: 1 / 1;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    border-color: transparent;
+    background: #fff;
+  }
+
+  .product-grid-mobile .product-card-media img {
+    object-fit: contain;
+  }
+
+  .product-grid-mobile .product-card-media .product-card-media-gradient {
+    display: none;
+  }
+
+  .product-grid-mobile .product-card-title {
+    margin-top: 0;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+  }
+
+  .product-grid-mobile .product-card-pricing {
+    margin-top: 0.375rem;
+  }
+
+  .product-grid-mobile .product-card-price {
+    font-size: 1rem;
+    line-height: 1.25rem;
+  }
+
+  .product-grid-mobile .product-card-pix {
+    margin-top: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+  }
+
+  .product-grid-mobile .product-card-installments,
+  .product-grid-mobile .product-card-flash-block .product-card-installments {
+    display: none;
+  }
+
+  .product-grid-mobile .product-card-flash-block {
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.5rem;
+    margin-top: 0;
+  }
+
+  .product-grid-mobile .product-card-flash-block .product-card-price {
+    font-size: 1rem;
+  }
+
   .touch-target-mobile {
     min-height: 44px;
     min-width: 44px;
-  }
-}
-
-@media (max-width: 359px) {
-  .product-grid-mobile {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

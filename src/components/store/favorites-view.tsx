@@ -1,6 +1,7 @@
 "use client";
 
 import { ProductCard } from "@/components/ui/product-card";
+import { PageHighlight } from "@/components/ui/page-highlight";
 import { prioritizeVisitedProducts } from "@/lib/catalog";
 import { products } from "@/lib/site-data";
 import { useStore } from "@/components/store/store-provider";
@@ -21,18 +22,12 @@ export function FavoritesView() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Favoritos
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Seus produtos salvos para comprar no melhor momento.
-        </h1>
-        <p className="mt-3 text-sm text-white/70">
-          Alertas ativos: {priceAlertProductIds.length}
-        </p>
-      </div>
-      <div className="product-grid-mobile grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <PageHighlight
+        eyebrow="Favoritos"
+        title="Seus produtos salvos para comprar no melhor momento."
+        description={`Alertas ativos: ${priceAlertProductIds.length}`}
+      />
+      <div className="product-grid-mobile grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
         {favoriteProducts.length ? (
           favoriteProducts.map((product) => (
             <div key={product.id} className="space-y-2">

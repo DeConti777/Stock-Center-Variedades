@@ -2,8 +2,11 @@ import { getShippingInCentsFromCep } from "@/lib/shipping";
 import {
   calculateMelhorEnvioShipment,
   isMelhorEnvioConfigured,
-  type MelhorEnvioProduct,
 } from "@/lib/melhor-envio";
+import {
+  buildMelhorEnvioProductsFromCartLines,
+  type PackageSource,
+} from "@/lib/package-dimensions";
 import { resolveProductsForCart } from "@/lib/store-server";
 import type { CartItem } from "@/lib/types";
 
@@ -21,14 +24,6 @@ export type CartShippingQuote = {
   source: "melhor_envio" | "fallback";
 };
 
-function defaultPackageDims() {
-  const w = Math.max(1, Math.round(Number(process.env.SHIPPING_DEFAULT_WIDTH_CM) || 18));
-  const h = Math.max(1, Math.round(Number(process.env.SHIPPING_DEFAULT_HEIGHT_CM) || 11));
-  const l = Math.max(1, Math.round(Number(process.env.SHIPPING_DEFAULT_LENGTH_CM) || 22));
-  const weight = Math.max(0.01, Number(process.env.SHIPPING_DEFAULT_WEIGHT_KG) || 0.35);
-  return { w, h, l, weight };
-}
-
 function defaultInsuranceReais() {
   const raw = process.env.SHIPPING_DEFAULT_INSURANCE_REAIS?.trim();
   if (!raw) return 10;
@@ -36,37 +31,11 @@ function defaultInsuranceReais() {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 10;
 }
 
-function buildMelhorEnvioProductsFromResolvedCart(
-  lines: Array<{ id: string; price: number; quantity: number }>,
-): MelhorEnvioProduct[] {
-  const { w, h, l, weight } = defaultPackageDims();
-
-  return lines.map((line) => ({
-    id: line.id,
-    width: w,
-    height: h,
-    length: l,
-    weight,
-    insurance_value: Math.round(line.price * 100) / 100,
-    quantity: line.quantity,
-  }));
-}
-
-function defaultMelhorEnvioProduct(): MelhorEnvioProduct {
-  const { w, h, l, weight } = defaultPackageDims();
-  return {
-    id: "default",
-    width: w,
-    height: h,
-    length: l,
-    weight,
-    insurance_value: defaultInsuranceReais(),
-    quantity: 1,
-  };
-}
-
-/** Cotacao sem carrinho (ex.: apenas CEP): um volume padrao. */
-export async function quotePublicShippingCents(destinationCepDigits8: string): Promise<{
+/** Cotacao sem carrinho (ex.: pagina do produto): medidas do SKU ou padrao da loja. */
+export async function quotePublicShippingCents(
+  destinationCepDigits8: string,
+  packageSource?: PackageSource | null,
+): Promise<{
   shippingInCents: number;
   source: "melhor_envio" | "fallback";
   options: CartShippingQuote["options"];
@@ -95,11 +64,19 @@ export async function quotePublicShippingCents(destinationCepDigits8: string): P
   }
 
   const origin = process.env.SHIPPING_ORIGIN_POSTAL_CODE!.replace(/\D/g, "");
+  const products = buildMelhorEnvioProductsFromCartLines([
+    {
+      id: "default",
+      price: defaultInsuranceReais(),
+      quantity: 1,
+      package: packageSource,
+    },
+  ]);
 
   const me = await calculateMelhorEnvioShipment({
     originPostalCode: origin,
     destinationPostalCode: dest,
-    products: [defaultMelhorEnvioProduct()],
+    products,
   });
 
   if (!me) {
@@ -122,9 +99,7 @@ export async function quotePublicShippingCents(destinationCepDigits8: string): P
   };
 }
 
-/**
- * Cotacao com itens do carrinho (dimensoes/peso padrao por SKU; seguro = preco de catalogo).
- */
+/** Cotacao com itens do carrinho (medidas por SKU; seguro = preco de catalogo). */
 export async function quoteCartShipping(
   destinationCepDigits8: string,
   normalizedItems: CartItem[],
@@ -154,17 +129,31 @@ export async function quoteCartShipping(
   }
 
   const origin = process.env.SHIPPING_ORIGIN_POSTAL_CODE!.replace(/\D/g, "");
+  const resolved = items.length > 0 ? await resolveProductsForCart(items) : [];
 
-  const products: MelhorEnvioProduct[] =
-    items.length > 0
-      ? buildMelhorEnvioProductsFromResolvedCart(
-          (await resolveProductsForCart(items)).map((p) => ({
+  const products =
+    resolved.length > 0
+      ? buildMelhorEnvioProductsFromCartLines(
+          resolved.map((p) => ({
             id: p.id,
             price: p.price,
             quantity: p.quantity,
+            package: {
+              packageWidthCm: p.packageWidthCm,
+              packageHeightCm: p.packageHeightCm,
+              packageLengthCm: p.packageLengthCm,
+              packageWeightKg: p.packageWeightKg,
+            },
           })),
         )
-      : [defaultMelhorEnvioProduct()];
+      : buildMelhorEnvioProductsFromCartLines([
+          {
+            id: "default",
+            price: defaultInsuranceReais(),
+            quantity: 1,
+            package: null,
+          },
+        ]);
 
   if (products.length === 0) {
     return {

@@ -4,58 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useStore } from "@/components/store/store-provider";
-import { ProductCard } from "@/components/ui/product-card";
 import { MobileFlashSaleCarousel } from "@/components/home/mobile-flash-sale-carousel";
+import { MobileInspiredCarousel } from "@/components/home/mobile-inspired-carousel";
 import {
-  calculatePixPrice,
-  formatCurrency,
-  getProductImageUrl,
-} from "@/lib/catalog";
+  MobileCompactStripCarousel,
+  MobileCompactStripRow,
+} from "@/components/home/mobile-compact-strip";
+import { formatCurrency, getProductImageUrl } from "@/lib/catalog";
 import type { Product } from "@/lib/types";
 
 type MobileHomeShelfProps = {
   products: Product[];
   featuredProducts: Product[];
 };
-
-function CompactProductStripItem({ product }: { product: Product }) {
-  const href = `/produto/${product.slug}`;
-  const pixPrice = calculatePixPrice(product);
-  const img = getProductImageUrl(product, 0);
-
-  return (
-    <Link
-      href={href}
-      className="flex w-[9.5rem] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--color-line)] bg-white shadow-[var(--shadow-soft)] transition hover:border-[var(--color-primary)]"
-    >
-      <div className="relative aspect-square w-full bg-[var(--color-soft)]">
-        {img.startsWith("/") ? (
-          <Image
-            src={img}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="152px"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- URLs externas
-          <img src={img} alt={product.name} className="h-full w-full object-cover" />
-        )}
-      </div>
-      <div className="flex flex-1 flex-col p-2">
-        <p className="line-clamp-2 text-xs font-bold leading-snug text-[var(--color-ink)]">
-          {product.name}
-        </p>
-        <p className="mt-1 text-sm font-black text-[var(--color-ink)]">
-          {formatCurrency(product.price)}
-        </p>
-        <p className="text-[10px] font-semibold text-[var(--color-success)]">
-          Pix {formatCurrency(pixPrice)}
-        </p>
-      </div>
-    </Link>
-  );
-}
 
 export function MobileHomeShelf({
   products,
@@ -73,11 +34,44 @@ export function MobileHomeShelf({
   }, [products, visitedProductIds]);
 
   const inspired = useMemo(() => {
-    const list = featuredProducts.filter((p) => p.stock > 0);
-    if (list.length >= 4) return list.slice(0, 4);
-    const extras = products.filter((p) => p.stock > 0 && !list.some((x) => x.id === p.id));
-    return [...list, ...extras].slice(0, 4);
-  }, [featuredProducts, products]);
+    const inStock = products.filter((product) => product.stock > 0);
+    const byId = new Map(inStock.map((product) => [product.id, product]));
+    const visited = visitedProductIds
+      .map((id) => byId.get(id))
+      .filter((product): product is Product => product !== undefined);
+    const visitedCategories = new Set(visited.map((product) => product.category));
+    const pool: Product[] = [];
+    const seen = new Set<string>();
+
+    const addMany = (list: Product[]) => {
+      for (const product of list) {
+        if (seen.has(product.id)) continue;
+        seen.add(product.id);
+        pool.push(product);
+      }
+    };
+
+    if (visitedCategories.size > 0) {
+      addMany(
+        inStock.filter(
+          (product) =>
+            !visitedProductIds.includes(product.id) &&
+            visitedCategories.has(product.category),
+        ),
+      );
+    }
+
+    addMany(featuredProducts.filter((product) => product.stock > 0));
+    addMany(
+      inStock.filter(
+        (product) =>
+          product.tags.includes("bestSeller") || product.tags.includes("promotion"),
+      ),
+    );
+    addMany(inStock);
+
+    return pool.slice(0, 48);
+  }, [products, visitedProductIds, featuredProducts]);
 
   const relatedToVisited = useMemo(() => {
     const latestVisited = products.find((product) => product.id === visitedProductIds[0]);
@@ -102,7 +96,7 @@ export function MobileHomeShelf({
   return (
     <section
       aria-label="Atalhos e recomendacoes"
-      className="border-b border-[var(--color-line)] bg-[var(--color-surface)] pb-4 pt-3"
+      className="border-b border-[var(--color-line)] bg-[var(--color-surface)] pb-0 pt-3"
     >
       <MobileFlashSaleCarousel products={products} />
 
@@ -156,8 +150,8 @@ export function MobileHomeShelf({
       ) : null}
 
       {visitedStrip.length > 0 ? (
-        <div className="mt-4 px-4">
-          <div className="mb-2 flex items-center justify-between">
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between px-4">
             <h2 className="text-sm font-black text-[var(--color-ink)]">
               Visto recentemente
             </h2>
@@ -168,37 +162,31 @@ export function MobileHomeShelf({
               Ver catalogo
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {visitedStrip.map((product) => (
-              <CompactProductStripItem key={product.id} product={product} />
-            ))}
-          </div>
+          <MobileCompactStripRow
+            products={visitedStrip}
+            ariaLabel="Visto recentemente"
+          />
         </div>
       ) : null}
 
       {inspired.length > 0 ? (
-        <div className="mt-5 px-4">
-          <h2 className="mb-3 text-sm font-black text-[var(--color-ink)]">
+        <div className="mt-5">
+          <h2 className="mb-3 px-4 text-sm font-black text-[var(--color-ink)]">
             Inspirado no que voce viu
           </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {inspired.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <MobileInspiredCarousel products={inspired} />
         </div>
       ) : null}
 
       {relatedToVisited.length > 0 ? (
-        <div className="mt-5 px-4">
-          <h2 className="mb-3 text-sm font-black text-[var(--color-ink)]">
+        <div className="mt-5 pb-3">
+          <h2 className="mb-3 px-4 text-sm font-black text-[var(--color-ink)]">
             Quem viu este, tambem viu
           </h2>
-          <div className="grid grid-flow-col auto-cols-[9.5rem] grid-rows-2 gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {relatedToVisited.map((product) => (
-              <CompactProductStripItem key={product.id} product={product} />
-            ))}
-          </div>
+          <MobileCompactStripCarousel
+            products={relatedToVisited}
+            ariaLabel="Quem viu este, tambem viu"
+          />
         </div>
       ) : null}
     </section>

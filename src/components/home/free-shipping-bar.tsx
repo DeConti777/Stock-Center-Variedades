@@ -8,17 +8,20 @@ const FREE_SHIPPING_TARGET = 149;
 
 export function FreeShippingBar() {
   const pathname = usePathname();
+  const { subtotal } = useStore();
   if (pathname?.startsWith("/conta") || pathname?.startsWith("/admin")) {
     return null;
   }
   const compactCheckout = pathname?.startsWith("/checkout") ?? false;
-  const { subtotal } = useStore();
   const progress = Math.min(100, (subtotal / FREE_SHIPPING_TARGET) * 100);
   const remaining = Math.max(0, FREE_SHIPPING_TARGET - subtotal);
   const reached = remaining <= 0;
 
   return (
-    <section className="sticky top-0 z-30 border-y border-[var(--color-line)] bg-white/95 backdrop-blur-sm">
+    <section
+      data-free-shipping-bar
+      className="sticky top-0 z-30 border-y border-[var(--color-line)] bg-white/95 backdrop-blur-sm"
+    >
       <div
         className={
           compactCheckout

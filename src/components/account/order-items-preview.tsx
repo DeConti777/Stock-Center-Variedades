@@ -7,6 +7,40 @@ export type OrderPreviewLineItem = {
   quantity: number;
 };
 
+export function OrderItemThumbnail({
+  image,
+  productName,
+  className = "h-20 w-20 shrink-0 rounded-[1.2rem]",
+}: {
+  image: string | null;
+  productName: string;
+  className?: string;
+}) {
+  if (image && isProductMediaUrl(image)) {
+    return (
+      <div className={`overflow-hidden border border-[var(--color-line)] bg-white ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image.trim()}
+          alt={productName}
+          className="h-full w-full object-cover"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex items-center justify-center border border-[var(--color-line)] bg-[var(--color-soft)] px-1 text-center ${className}`}
+      title={productName}
+    >
+      <span className="text-sm font-black text-[var(--color-muted)]">
+        {productInitials(productName)}
+      </span>
+    </div>
+  );
+}
+
 function productInitials(name: string) {
   const w = name.trim().split(/\s+/).filter(Boolean);
   if (w.length >= 2) {
@@ -48,6 +82,7 @@ export function OrderItemsPreview({
             style={{ zIndex: preview.length - index }}
           >
             {item.image && isProductMediaUrl(item.image) ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.image.trim()}
                 alt={item.productName}

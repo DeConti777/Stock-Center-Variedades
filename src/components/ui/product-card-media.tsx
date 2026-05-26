@@ -53,7 +53,7 @@ export function ProductCardMedia({
 
   return (
     <div
-      className={`group relative flex items-end overflow-hidden rounded-[1rem] border border-[rgba(201,151,40,0.18)] bg-[var(--color-soft)] ${
+      className={`product-card-media group relative flex items-end overflow-hidden rounded-[1rem] border border-[rgba(201,151,40,0.18)] bg-[var(--color-soft)] ${
         compact ? "aspect-[3/2] p-2" : "aspect-square p-4"
       }`}
     >
@@ -65,7 +65,7 @@ export function ProductCardMedia({
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.22))]" />
+          <div className="product-card-media-gradient absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.22))]" />
         </>
       ) : (
         <>

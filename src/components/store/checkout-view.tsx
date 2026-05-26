@@ -66,6 +66,32 @@ function isShippingOptionRow(value: unknown): value is ShippingOptionRow {
   );
 }
 
+function pickCheapestAndFastestShippingOptions(
+  options: ShippingOptionRow[],
+): ShippingOptionRow[] {
+  if (options.length <= 1) return options;
+
+  const byPrice = [...options].sort((a, b) => {
+    if (a.priceReais !== b.priceReais) return a.priceReais - b.priceReais;
+    if (a.deliveryDays !== b.deliveryDays) return a.deliveryDays - b.deliveryDays;
+    return a.id - b.id;
+  });
+  const cheapest = byPrice[0];
+  if (!cheapest) return [];
+
+  const byFastest = [...options].sort((a, b) => {
+    if (a.deliveryDays !== b.deliveryDays) return a.deliveryDays - b.deliveryDays;
+    if (a.priceReais !== b.priceReais) return a.priceReais - b.priceReais;
+    return a.id - b.id;
+  });
+  const fastest = byFastest[0];
+  if (!fastest || fastest.id === cheapest.id) {
+    return [cheapest];
+  }
+
+  return [cheapest, fastest];
+}
+
 /** Aplica retorno de /api/shipping/quote ao estado de frete (opcao mais barata quando ha lista ME). */
 function freightStateFromQuoteApi(data: ShippingQuoteApiOk): {
   options: ShippingOptionRow[];
@@ -77,11 +103,12 @@ function freightStateFromQuoteApi(data: ShippingQuoteApiOk): {
   const options = Array.isArray(rawOpts)
     ? rawOpts.filter(isShippingOptionRow).sort((a, b) => a.priceReais - b.priceReais)
     : [];
+  const topOptions = pickCheapestAndFastestShippingOptions(options);
 
-  if (data.shippingSource === "melhor_envio" && options.length > 0) {
-    const first = options[0];
+  if (data.shippingSource === "melhor_envio" && topOptions.length > 0) {
+    const first = topOptions[0];
     return {
-      options,
+      options: topOptions,
       melhorEnvioServiceId: first.id,
       shippingInCents: Math.round(first.priceReais * 100),
       carrierLabel: `${first.company} — ${first.name}`,
@@ -289,11 +316,7 @@ export function CheckoutView({
         setShippingQuoteCents(fr.shippingInCents);
         setShippingCarrierLabel(fr.carrierLabel);
         setCepStatus("ok");
-        setCepMessage(
-          data.shippingSource === "melhor_envio"
-            ? "Endereco encontrado. Frete cotado (Melhor Envio)."
-            : "Endereco encontrado. Frete estimado (sem integracao ativa).",
-        );
+        setCepMessage(null);
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") return;
         setCepStatus("error");
@@ -407,7 +430,7 @@ export function CheckoutView({
       setShippingQuoteCents(fr.shippingInCents);
       setShippingCarrierLabel(fr.carrierLabel);
       setCepStatus("ok");
-      setCepMessage("Endereco encontrado.");
+      setCepMessage(null);
     } catch {
       setCepStatus("error");
       setCepMessage("Erro de rede.");
@@ -972,7 +995,7 @@ export function CheckoutView({
                         {cepMessage ?? "Consultando frete..."}
                       </p>
                     ) : null}
-                    {freightOptions.length > 1 ? (
+                    {freightOptions.length > 0 ? (
                       <div className="block sm:col-span-2">
                         <span className={labelClass}>Forma de entrega</span>
                         <ul className="mt-2 space-y-2">
@@ -1061,7 +1084,7 @@ export function CheckoutView({
                       ) : null}
                     </div>
 
-                    {freightOptions.length > 1 ? (
+                    {freightOptions.length > 0 ? (
                       <div className="block sm:col-span-2">
                         <span className={labelClass}>Forma de entrega</span>
                         <ul className="mt-2 space-y-2">
@@ -1297,7 +1320,7 @@ export function CheckoutView({
           </div>
           {fulfillmentMode === "SHIP" ? (
             <>
-          <div className="flex flex-col gap-1 text-[var(--color-muted)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between text-[var(--color-muted)]">
             <span>Frete</span>
             <span className="text-right font-medium text-[var(--color-ink)]">
               {pricing.shipping != null ? formatCurrency(pricing.shipping) : "—"}

@@ -68,7 +68,7 @@ export function BudgetFinderSection({ products }: { products: Product[] }) {
           </button>
         ))}
       </div>
-      <div className="product-grid-mobile mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="product-grid-mobile mt-6 grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
         {filtered.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
@@ -147,7 +147,7 @@ export function RelatedToVisitedSection({ products }: { products: Product[] }) {
         title="Quem viu este, tambem viu"
         description="Recomendacoes com base na sua navegacao recente para aumentar relevancia."
       />
-      <div className="product-grid-mobile mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="product-grid-mobile mt-8 grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
         {related.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}

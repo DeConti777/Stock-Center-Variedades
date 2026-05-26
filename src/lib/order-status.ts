@@ -12,12 +12,12 @@ export const orderStatusLabels: Record<string, string> = {
 };
 
 export const customerOrderTimeline = [
-  { status: "PENDING_PAYMENT", label: "Pedido criado" },
-  { status: "PAID", label: "Pagamento aprovado" },
-  { status: "PROCESSING", label: "Preparacao" },
-  { status: "SHIPPED", label: "Envio" },
-  { status: "DELIVERED", label: "Entrega" },
-];
+  { status: "PENDING_PAYMENT", label: "Pedido criado", shortLabel: "Criado" },
+  { status: "PAID", label: "Pagamento aprovado", shortLabel: "Pago" },
+  { status: "PROCESSING", label: "Preparando", shortLabel: "Preparando" },
+  { status: "SHIPPED", label: "Enviado", shortLabel: "Enviado" },
+  { status: "DELIVERED", label: "Entrega", shortLabel: "Entrega" },
+] as const;
 
 export function getOrderStatusLabel(status: string) {
   return orderStatusLabels[status] || status;

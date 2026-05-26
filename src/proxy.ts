@@ -1,14 +1,14 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 /**
- * Middleware global: aplica headers de seguranca sem alterar o roteamento.
+ * Proxy global: aplica headers de seguranca sem alterar o roteamento.
  *
  * Por que sem CSP estrita?
  *   Uma Content-Security-Policy mal calibrada quebra Stripe Checkout, GA4 e
  *   `next/script`. Os comentarios abaixo mostram a baseline recomendada caso voce
  *   queira ativar depois de validar manualmente no ambiente de staging.
  */
-export function middleware(request: NextRequest) {
+export function proxy() {
   const response = NextResponse.next();
   const headers = response.headers;
 

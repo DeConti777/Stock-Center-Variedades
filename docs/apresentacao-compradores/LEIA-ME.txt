@@ -1,0 +1,14 @@
+Apresentacao Stock Center 2.0 — compradores / donos da loja fisica
+
+Arquivo: apresentacao-stock-center.pptx (22 slides)
+
+Design: paleta dourada e escura do site (globals.css), capa escura,
+slides de conteudo com fundo creme, divisores de secao, cards KPI,
+tabela de cenarios, grafico de projecao 12 meses e encerramento com CTA.
+
+Importar no Google Slides:
+1. Google Drive -> Upload do arquivo .pptx
+2. Botao direito -> Abrir com -> Google Apresentacoes
+
+Regenerar apos editar o script:
+  npm run presentation:build

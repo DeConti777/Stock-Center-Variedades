@@ -5,6 +5,7 @@ import type {
   AdminFinancialReportSummary,
   AdminReportPeriodSnapshot,
 } from "@/lib/admin-server";
+import { adminActionButtonClass } from "@/components/admin/admin-mobile-ui";
 
 async function fetchReportData(type: "orders" | "products") {
   const response = await fetch(
@@ -258,7 +259,7 @@ export function AdminReports({
                 type="button"
                 onClick={() => void exportCSV("orders")}
                 disabled={exporting || !report.databaseConfigured}
-                className="touch-target-mobile rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                className={adminActionButtonClass({ tone: "primary" })}
               >
                 Exportar pedidos (CSV)
               </button>
@@ -266,7 +267,7 @@ export function AdminReports({
                 type="button"
                 onClick={() => void exportCSV("products")}
                 disabled={exporting || !report.databaseConfigured}
-                className="touch-target-mobile rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-6 py-3 text-sm font-semibold text-[var(--color-ink)] transition hover:border-[var(--color-ink)]/25 disabled:cursor-not-allowed disabled:opacity-50"
+                className={adminActionButtonClass({})}
               >
                 Exportar produtos (CSV)
               </button>

@@ -48,6 +48,7 @@ export function AdminCharts({
   salesByCategory: AdminSalesByCategory[];
 }) {
   const compactBestSellers = bestSellers.slice(0, 5);
+  const compactSalesByCategory = salesByCategory.slice(0, 6);
   const formatBrl = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -57,15 +58,15 @@ export function AdminCharts({
 
   return (
     <div className="flex flex-col gap-10">
-      <div className="grid gap-8 lg:grid-cols-2">
-        <div className="min-h-[320px]">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="min-h-[280px]">
           <h3 className="mb-4 text-lg font-semibold">Vendas por mes (12 meses)</h3>
           {salesData.salesByMonth.length === 0 ? (
             <p className="text-sm text-[var(--color-muted)]">
               Sem pedidos pagos no periodo para exibir o grafico.
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={220}>
               <LineChart data={salesData.salesByMonth}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -76,14 +77,14 @@ export function AdminCharts({
             </ResponsiveContainer>
           )}
         </div>
-        <div className="min-h-[320px]">
+        <div className="min-h-[280px]">
           <h3 className="mb-4 text-lg font-semibold">Itens mais vendidos (quantidade)</h3>
           {bestSellers.length === 0 ? (
             <p className="text-sm text-[var(--color-muted)]">
               Ainda nao ha itens em pedidos pagos para ranquear.
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={compactBestSellers} layout="vertical" margin={{ left: 8, right: 16 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" allowDecimals={false} />
@@ -105,21 +106,21 @@ export function AdminCharts({
         </div>
       </div>
 
-      <div className="min-h-[300px]">
+      <div className="min-h-[260px]">
         <h3 className="mb-1 text-lg font-semibold">Vendas por categoria</h3>
         <p className="mb-4 text-sm text-[var(--color-muted)]">
           Participacao da receita por categoria em pedidos pagos, enviados ou entregues.
         </p>
-        {salesByCategory.length === 0 ? (
+        {compactSalesByCategory.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)]">
             Ainda nao ha itens em pedidos pagos para agrupar por categoria.
           </p>
         ) : (
           <div className="mx-auto w-full max-w-lg">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={salesByCategory}
+                  data={compactSalesByCategory}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
@@ -133,20 +134,20 @@ export function AdminCharts({
                       : ""
                   }
                 >
-                  {salesByCategory.map((_, index) => (
+                  {compactSalesByCategory.map((_, index) => (
                     <Cell
-                      key={`cat-${salesByCategory[index]?.name ?? index}`}
+                      key={`cat-${compactSalesByCategory[index]?.name ?? index}`}
                       fill={CATEGORY_SLICE_COLORS[index % CATEGORY_SLICE_COLORS.length]}
                     />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => formatBrl(Number(value))} />
                 <Legend
-                  layout="vertical"
-                  align="right"
-                  verticalAlign="middle"
+                  layout="horizontal"
+                  align="center"
+                  verticalAlign="bottom"
                   formatter={(value) =>
-                    value.length > 22 ? `${value.slice(0, 20)}…` : value
+                    value.length > 14 ? `${value.slice(0, 12)}…` : value
                   }
                 />
               </PieChart>

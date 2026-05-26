@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductCard } from "@/components/ui/product-card";
 import { prioritizeVisitedProducts } from "@/lib/catalog";
@@ -104,10 +104,10 @@ export function AddToCartModal({
     };
   }, []);
 
-  const relatedOrdered = useMemo(() => {
-    if (!data?.products?.length) return [];
-    return prioritizeVisitedProducts(data.products, visitedProductIds);
-  }, [data?.products, visitedProductIds]);
+  const relatedOrdered =
+    data?.products?.length
+      ? prioritizeVisitedProducts(data.products, visitedProductIds)
+      : [];
 
   const heroSrc = data?.baseProduct
     ? getProductHeroSrc(data.baseProduct)

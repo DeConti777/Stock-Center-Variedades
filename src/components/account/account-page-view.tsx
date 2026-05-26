@@ -185,35 +185,54 @@ export function AccountPageView({
         </article>
       </div>
 
-      <section className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6 shadow-[var(--shadow-soft)]">
+      <section className="min-w-0 rounded-[2rem] border border-[var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
         <h2 className="font-display text-2xl font-bold text-[var(--color-ink)]">Pedidos recentes</h2>
         <div className="mt-6 space-y-4">
           {recentOrders.length ? (
-            recentOrders.map((order) => (
-              <Link
-                key={order.id}
-                href={`/conta/pedidos/${order.id}`}
-                className="flex flex-col gap-4 rounded-[1.5rem] bg-[var(--color-soft)] p-5 transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex min-w-0 flex-1 gap-4">
-                  <OrderItemsPreview items={order.items} compact />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-[var(--color-ink)]">
-                      Pedido {order.id.slice(0, 8).toUpperCase()}
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--color-muted)]">
-                      {new Date(order.createdAt).toLocaleDateString("pt-BR")}
-                    </p>
+            recentOrders.map((order) => {
+              const orderCode = order.id.slice(0, 8).toUpperCase();
+              const orderDate = new Date(order.createdAt).toLocaleDateString("pt-BR");
+              const orderTotal = formatCurrency(order.totalInCents / 100);
+              const orderStatus = getOrderStatusLabel(order.status);
+
+              return (
+                <Link
+                  key={order.id}
+                  href={`/conta/pedidos/${order.id}`}
+                  className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-[1.5rem] bg-[var(--color-soft)] p-4 transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3 sm:hidden">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-[var(--color-ink)]">
+                        Pedido{" "}
+                        <span className="font-mono tracking-wide">{orderCode}</span>
+                      </p>
+                      <p className="mt-0.5 text-xs text-[var(--color-muted)]">{orderDate}</p>
+                    </div>
+                    <div className="shrink-0 text-right text-sm">
+                      <p className="font-bold text-[var(--color-ink)]">{orderTotal}</p>
+                      <p className="text-xs text-[var(--color-muted)]">{orderStatus}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="shrink-0 text-sm sm:text-right">
-                  <p className="font-bold text-[var(--color-ink)]">
-                    {formatCurrency(order.totalInCents / 100)}
-                  </p>
-                  <p className="text-[var(--color-muted)]">{getOrderStatusLabel(order.status)}</p>
-                </div>
-              </Link>
-            ))
+
+                  <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <OrderItemsPreview items={order.items} compact />
+                    <div className="hidden min-w-0 flex-1 sm:block">
+                      <p className="truncate font-semibold text-[var(--color-ink)]">
+                        Pedido{" "}
+                        <span className="font-mono tracking-wide">{orderCode}</span>
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--color-muted)]">{orderDate}</p>
+                    </div>
+                  </div>
+
+                  <div className="hidden shrink-0 text-sm sm:block sm:text-right">
+                    <p className="font-bold text-[var(--color-ink)]">{orderTotal}</p>
+                    <p className="text-[var(--color-muted)]">{orderStatus}</p>
+                  </div>
+                </Link>
+              );
+            })
           ) : (
             <p className="text-sm text-[var(--color-muted)]">
               Seus pedidos pagos aparecerao aqui depois do primeiro checkout.

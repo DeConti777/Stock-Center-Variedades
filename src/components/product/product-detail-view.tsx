@@ -496,8 +496,8 @@ export function ProductDetailView({
             ) : (
               <div className="mt-5 space-y-4">
                 <p className="text-sm text-[var(--color-muted)]">
-                  Simule o frete para 1 unidade deste produto (mesma API usada no checkout, com
-                  Melhor Envio quando configurado).
+                  Simule o frete para 1 unidade (medidas da embalagem cadastradas no admin, ou padrao
+                  da loja).
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input
@@ -661,7 +661,7 @@ export function ProductDetailView({
             Continue navegando por itens com alto potencial de compra.
           </h2>
         </div>
-        <div className="product-grid-mobile grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="product-grid-mobile grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
           {relatedProductsOrdered.map((relatedProduct) => (
             <ProductCard key={relatedProduct.id} product={relatedProduct} />
           ))}

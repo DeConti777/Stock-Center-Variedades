@@ -6,6 +6,7 @@ import {
   fetchFlashSaleDiscountMap,
   mapPrismaProductToCatalog,
 } from "@/lib/prisma-product-map";
+import { getProductHeroSrc, isProductMediaUrl } from "@/lib/product-media";
 import type { CatalogFilters, Product, ProductTag } from "@/lib/types";
 
 async function getProductsFromDb(): Promise<Product[] | null> {
@@ -126,7 +127,14 @@ export function calculateInstallmentAmount(
 }
 
 export function getProductImageUrl(product: Product, index = 0): string {
-  return product.images[index] ?? "/placeholder-product.png";
+  if (index === 0) {
+    const hero = getProductHeroSrc(product);
+    if (hero) return hero;
+  }
+  const at = product.images[index];
+  if (at && isProductMediaUrl(at)) return at.trim();
+  const hero = getProductHeroSrc(product);
+  return hero ?? "/placeholder-product.png";
 }
 
 export function getProductRatingStars(rating: number): number[] {

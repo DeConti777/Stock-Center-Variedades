@@ -10,6 +10,7 @@ import {
   sanitizeAddressNumber,
   sanitizeUf,
 } from "@/lib/br-fields";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 const inputClass =
   "w-full rounded-2xl border border-[var(--color-line)] px-4 py-3 text-base outline-none focus:border-[var(--color-primary)]";
@@ -95,18 +96,13 @@ export function RegisterPageView() {
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8">
-      <section className="rounded-[2rem] bg-[var(--color-ink)] p-5 text-white sm:rounded-[2.5rem] sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Novo cliente
-        </p>
-        <h1 className="mt-4 font-display text-2xl font-black tracking-tight sm:text-4xl">
-          Crie sua conta para finalizar o checkout.
-        </h1>
-        <p className="mt-5 text-base leading-8 text-white/75">
-          Em menos de um minuto voce cria sua conta e segue para concluir o pedido
-          com seguranca.
-        </p>
-      </section>
+      <PageHighlight
+        as="section"
+        eyebrow="Novo cliente"
+        title="Crie sua conta para finalizar o checkout."
+        description="Em menos de um minuto voce cria sua conta e segue para concluir o pedido com seguranca."
+        className="h-full"
+      />
 
       <form
         className="rounded-[2.5rem] border border-[var(--color-line)] bg-white p-6 sm:p-8"

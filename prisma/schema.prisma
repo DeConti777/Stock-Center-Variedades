@@ -104,6 +104,11 @@ model Product {
   flashSaleEndsAt          DateTime?
   /// Percentual exibido na oferta (1-99), definido no admin. Null quando sem oferta ou legado.
   flashSaleDiscountPercent Int?
+  /// Embalagem fechada para cotacao/etiqueta Melhor Envio (cm/kg). Null = SHIPPING_DEFAULT_* no .env.
+  packageWidthCm           Int?
+  packageHeightCm          Int?
+  packageLengthCm          Int?
+  packageWeightKg          Float?
   createdAt                DateTime   @default(now())
   updatedAt                DateTime   @updatedAt
   cartItems                CartItem[]
@@ -193,6 +198,13 @@ model Order {
   paymentRetryCount       Int                @default(0)
   shippingCode            String?
   shippingCarrier         String?
+  /// ID do servico Melhor Envio escolhido na cotacao (ex.: 1 = PAC).
+  melhorEnvioServiceId    String?
+  /// ID da etiqueta no carrinho Melhor Envio apos inserir frete.
+  melhorEnvioShipmentId   String?            @unique
+  /// CART | PURCHASED | FAILED
+  melhorEnvioStatus       String?
+  melhorEnvioError        String?
   trackingUrl             String?
   invoiceUrl              String?
   paidAt                  DateTime?

@@ -61,7 +61,7 @@ export async function POST(request: Request) {
           ? { ...item, images: dedupeImageUrlsExact(item.images) }
           : item;
 
-      const product = await createAdminProduct(normalized);
+      const { product } = await createAdminProduct(normalized);
       created.push(product);
     } catch (error) {
       errors.push({

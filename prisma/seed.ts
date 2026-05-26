@@ -59,7 +59,6 @@ async function main() {
           description: product.description,
           badge: product.badge ?? null,
           sku: product.sku,
-          images: stringifyStringArray(product.images),
           features: stringifyStringArray(product.features),
           tags: stringifyStringArray(product.tags),
           published: true,

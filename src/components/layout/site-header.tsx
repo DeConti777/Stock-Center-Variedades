@@ -7,16 +7,10 @@ import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AccountControls } from "@/components/layout/account-controls";
+import { ProductSearchField } from "@/components/search/product-search-field";
 import { useStore } from "@/components/store/store-provider";
 import { CartLink } from "@/components/ui/store-buttons";
 import type { UserRole } from "@/lib/types";
-
-type SearchSuggestion = {
-  id: string;
-  slug: string;
-  name: string;
-  category: string;
-};
 
 const navLinks = [
   { href: "/", label: "Inicio" },
@@ -76,11 +70,11 @@ export function Header({
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearch, setMobileSearch] = useState("");
-  const [mobileSuggestions, setMobileSuggestions] = useState<SearchSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const { cartCount } = useStore();
+
+  const handleSearchSubmit = (query: string) => {
+    router.push(query ? `/catalogo?q=${encodeURIComponent(query)}` : "/catalogo");
+  };
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -94,34 +88,6 @@ export function Header({
       document.body.style.overflow = prev;
     };
   }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        setLoadingSuggestions(true);
-        const res = await fetch(
-          `/api/search-suggestions?q=${encodeURIComponent(mobileSearch.trim())}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) {
-          setMobileSuggestions([]);
-          return;
-        }
-        const data = (await res.json()) as { suggestions?: SearchSuggestion[] };
-        setMobileSuggestions(data.suggestions || []);
-      } catch {
-        setMobileSuggestions([]);
-      } finally {
-        setLoadingSuggestions(false);
-      }
-    }, 180);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [mobileSearch]);
 
   const mobileNavLinkClass = (active: boolean) =>
     `block rounded-xl px-4 py-3 text-base font-semibold ${
@@ -325,10 +291,10 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50">
+      <header className="sticky top-0 z-50" data-site-header>
       <div className="hidden border-b border-[rgba(201,151,40,0.28)] bg-[var(--color-ink)]/96 shadow-[0_18px_50px_rgba(0,0,0,0.18)] backdrop-blur-md lg:block">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="min-w-0 flex-1">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <Link href="/" className="min-w-0 shrink-0">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[rgba(243,210,107,0.72)] bg-black shadow-[0_0_28px_rgba(201,151,40,0.28)]">
                 <Image
@@ -341,52 +307,50 @@ export function Header({
                 />
               </span>
               <div className="min-w-0">
-                <p className="truncate font-display text-lg font-bold text-white sm:text-xl">
+                <p className="whitespace-nowrap font-display text-lg font-bold text-white sm:text-xl">
                   Stock Center Variedades
                 </p>
-                <p className="truncate text-xs uppercase tracking-[0.24em] text-[var(--color-accent)]">
+                <p className="whitespace-nowrap text-xs uppercase tracking-[0.24em] text-[var(--color-accent)]">
                   Compra simples, segura e premium
                 </p>
               </div>
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-6 lg:flex">
-            {viewer?.role === "ADMIN" ? (
-              <Link
-                href="/admin"
-                className={`text-sm font-semibold transition-colors ${
-                  pathname === "/admin"
-                    ? "text-[var(--color-accent)]"
-                    : "text-[rgba(255,255,255,0.78)] hover:text-[var(--color-accent)]"
-                }`}
-              >
-                Admin
-              </Link>
-            ) : null}
-            {navLinks.map((link) => {
-              const active = pathname === link.href;
-              return (
+          <div className="hidden shrink-0 items-center gap-4 lg:flex lg:gap-6">
+            <nav className="flex items-center gap-6">
+              {viewer?.role === "ADMIN" ? (
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  href="/admin"
                   className={`text-sm font-semibold transition-colors ${
-                    active
+                    pathname === "/admin"
                       ? "text-[var(--color-accent)]"
                       : "text-[rgba(255,255,255,0.78)] hover:text-[var(--color-accent)]"
                   }`}
                 >
-                  {link.label}
+                  Admin
                 </Link>
-              );
-            })}
-          </nav>
+              ) : null}
+              {navLinks.map((link) => {
+                const active = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`whitespace-nowrap text-sm font-semibold transition-colors ${
+                      active
+                        ? "text-[var(--color-accent)]"
+                        : "text-[rgba(255,255,255,0.78)] hover:text-[var(--color-accent)]"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
 
-          <div className="hidden lg:block">
             <CartLink />
-          </div>
 
-          <div className="hidden lg:block">
             <AccountControls viewer={viewer} />
           </div>
         </div>
@@ -406,62 +370,12 @@ export function Header({
               />
             </span>
           </Link>
-          <form
-            className="relative min-w-0 flex-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const q = mobileSearch.trim();
-              setShowSuggestions(false);
-              router.push(q ? `/catalogo?q=${encodeURIComponent(q)}` : "/catalogo");
-            }}
-          >
-            <label className="sr-only" htmlFor="mobile-header-search">
-              Buscar produtos
-            </label>
-            <input
-              id="mobile-header-search"
-              type="search"
-              value={mobileSearch}
-              onChange={(event) => setMobileSearch(event.target.value)}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => {
-                window.setTimeout(() => setShowSuggestions(false), 120);
-              }}
-              placeholder="Buscar produtos..."
-              className="h-11 w-full rounded-full border border-[rgba(243,210,107,0.35)] bg-white/10 px-4 text-sm font-medium text-white placeholder:text-white/65 outline-none focus:border-[var(--color-accent)]"
-            />
-            {showSuggestions ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-50 overflow-hidden rounded-2xl border border-[rgba(243,210,107,0.35)] bg-[var(--color-ink)]/98 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-md">
-                {loadingSuggestions ? (
-                  <p className="px-4 py-3 text-xs font-medium text-white/70">Buscando...</p>
-                ) : mobileSuggestions.length ? (
-                  <ul className="max-h-64 overflow-y-auto">
-                    {mobileSuggestions.map((item) => (
-                      <li key={item.id}>
-                        <Link
-                          href={`/produto/${item.slug}`}
-                          onClick={() => {
-                            setShowSuggestions(false);
-                            setMobileSearch(item.name);
-                          }}
-                          className="block border-b border-white/10 px-4 py-3 last:border-b-0"
-                        >
-                          <p className="truncate text-sm font-bold text-white">{item.name}</p>
-                          <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-[var(--color-accent)]">
-                            {item.category}
-                          </p>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="px-4 py-3 text-xs font-medium text-white/70">
-                    Nenhum produto relacionado encontrado.
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </form>
+          <ProductSearchField
+            variant="header"
+            className="min-w-0 flex-1"
+            onSubmit={handleSearchSubmit}
+            inputId="mobile-header-search"
+          />
 
           <button
             type="button"

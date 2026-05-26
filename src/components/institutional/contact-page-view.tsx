@@ -1,17 +1,14 @@
 import { ContactForm } from "@/components/forms/contact-form";
+import { PageHighlight } from "@/components/ui/page-highlight";
 import { instagramLink, whatsappLink } from "@/lib/site-data";
 
 export function ContactPageView() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Contato
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Atendimento rapido: duvidas, pedidos e pos-venda.
-        </h1>
-      </div>
+      <PageHighlight
+        eyebrow="Contato"
+        title="Atendimento rapido: duvidas, pedidos e pos-venda."
+      />
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
           <div className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6">

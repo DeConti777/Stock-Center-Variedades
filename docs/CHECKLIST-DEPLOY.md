@@ -1,6 +1,6 @@
 # Checklist de deploy (Stock Center 2.0)
 
-Use este checklist junto da planilha `orcamento-deploy-e-apis.csv` na raiz do repositório. Os preços e limites mudam: sempre confira os links oficiais na planilha.
+Os preços e limites dos provedores mudam: sempre confira os links oficiais (Vercel, Neon, Resend, Stripe) antes do deploy.
 
 ---
 
@@ -112,7 +112,7 @@ Em cada console de OAuth, configure a **URL de callback** do NextAuth (ex.: `htt
 
 ---
 
-## Referência rápida de APIs (detalhe na planilha CSV)
+## Referência rápida de APIs
 
 | Serviço        | Uso principal                    |
 |----------------|----------------------------------|
@@ -122,5 +122,3 @@ Em cada console de OAuth, configure a **URL de callback** do NextAuth (ex.: `htt
 | Brasil API     | Endereço por CEP                 |
 | GA4 (gtag)     | Analytics opcional               |
 | Google/FB/Apple| Login opcional                   |
-
-Arquivo de planilha: **`orcamento-deploy-e-apis.csv`** (duas seções: custos e integrações).

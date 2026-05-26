@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getShippingReaisFromCep } from "@/lib/shipping";
 import { products } from "@/lib/site-data";
 import type { CartItem, Product } from "@/lib/types";
 import { AddToCartModal } from "@/components/store/add-to-cart-modal";
@@ -169,7 +168,7 @@ export function StoreProvider({
     initialVisitedProductIds,
   );
   const [priceAlertProductIds, setPriceAlertProductIds] = useState<string[]>([]);
-  const [shipping, setShipping] = useState(() => getShippingReaisFromCep(""));
+  const [shipping, setShipping] = useState(0);
   const [lastRecoveredAt, setLastRecoveredAt] = useState<string | null>(
     initialLastRecoveredAt,
   );

@@ -9,8 +9,11 @@ import {
   getReachedOrderStatusIndex,
 } from "@/lib/order-status";
 import { getPrismaOrNull } from "@/lib/prisma";
+import { syncPaidOrderFromCheckoutSessionId } from "@/lib/stripe-checkout-sync";
 import { whatsappLink } from "@/lib/site-data";
+import { OrderItemThumbnail } from "@/components/account/order-items-preview";
 import { RebuyOrderButton } from "@/components/account/rebuy-order-button";
+import { PageHighlight } from "@/components/ui/page-highlight";
 
 type OrderDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -64,7 +67,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     notFound();
   }
 
-  const order = await prisma.order.findFirst({
+  let order = await prisma.order.findFirst({
     where: {
       id,
       userId: session.user.id,
@@ -82,38 +85,91 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     notFound();
   }
 
+  if (
+    order.status === "PENDING_PAYMENT" &&
+    order.stripeCheckoutSessionId
+  ) {
+    await syncPaidOrderFromCheckoutSessionId(prisma, order.stripeCheckoutSessionId);
+    order =
+      (await prisma.order.findFirst({
+        where: { id, userId: session.user.id },
+        include: {
+          items: true,
+          notificationLogs: {
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          },
+        },
+      })) ?? order;
+  }
+
   const address = parseShippingAddress(order.shippingAddress);
   const reachedIndex = getReachedOrderStatusIndex(order.status);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] bg-[var(--color-ink)] px-5 py-6 text-white sm:rounded-[2.5rem] sm:px-10 sm:py-10">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/60">
-          Pedido {order.id.slice(0, 8).toUpperCase()}
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black tracking-tight sm:text-5xl">
-          {getOrderStatusLabel(order.status)}
-        </h1>
-        <p className="mt-3 text-base text-white/70">
-          Criado em {order.createdAt.toLocaleDateString("pt-BR")} · Total {formatCurrency(order.totalInCents / 100)}
-        </p>
-        <div className="mt-5">
-          <RebuyOrderButton
-            orderId={order.id}
-            items={order.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-            }))}
-            className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white"
-          />
-        </div>
-      </div>
+      <PageHighlight
+        eyebrow={`Pedido ${order.id.slice(0, 8).toUpperCase()}`}
+        title={getOrderStatusLabel(order.status)}
+        description={`Criado em ${order.createdAt.toLocaleDateString("pt-BR")} · Total ${formatCurrency(order.totalInCents / 100)}`}
+      >
+        <RebuyOrderButton
+          orderId={order.id}
+          items={order.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          }))}
+          className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white"
+        />
+      </PageHighlight>
 
       <section className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6">
         <h2 className="font-display text-2xl font-bold text-[var(--color-ink)]">
           Linha do tempo
         </h2>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+        <div className="mt-6 md:hidden">
+          <ol className="relative grid grid-cols-5 items-start gap-0">
+            <div
+              className="pointer-events-none absolute left-[10%] right-[10%] top-[5px] h-0.5 bg-[var(--color-line)]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute left-[10%] top-[5px] h-0.5 bg-[var(--color-primary)] transition-[width]"
+              style={{
+                width:
+                  reachedIndex <= 0
+                    ? "0%"
+                    : `${(reachedIndex / (customerOrderTimeline.length - 1)) * 80}%`,
+              }}
+              aria-hidden
+            />
+            {customerOrderTimeline.map((step, index) => {
+              const active = index <= reachedIndex;
+              return (
+                <li
+                  key={step.status}
+                  title={step.label}
+                  className="relative z-10 flex flex-col items-center px-0.5 text-center"
+                >
+                  <span
+                    className={`inline-flex h-3 w-3 shrink-0 rounded-full ring-2 ring-white ${
+                      active ? "bg-[var(--color-primary)]" : "bg-[var(--color-line)]"
+                    }`}
+                    aria-hidden
+                  />
+                  <p
+                    className={`mt-2 text-[10px] font-bold leading-tight ${
+                      active ? "text-[var(--color-ink)]" : "text-[var(--color-muted)]"
+                    }`}
+                  >
+                    {step.shortLabel}
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="mt-6 hidden gap-3 md:grid md:grid-cols-5">
           {customerOrderTimeline.map((step, index) => {
             const active = index <= reachedIndex;
             return (
@@ -152,13 +208,12 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               return (
                 <div
                   key={item.id}
-                  className="grid gap-4 rounded-[1.5rem] bg-[var(--color-soft)] p-4 sm:grid-cols-[86px_1fr_auto]"
+                  className="grid gap-4 rounded-[1.5rem] bg-[var(--color-soft)] p-4 sm:grid-cols-[86px_1fr_auto] sm:items-center"
                 >
-                  <div
-                    className="h-20 w-20 rounded-[1.2rem]"
-                    style={{
-                      background: item.image || "var(--color-line)",
-                    }}
+                  <OrderItemThumbnail
+                    image={item.image}
+                    productName={item.productName}
+                    className="h-20 w-20 justify-self-start rounded-[1.2rem]"
                   />
                   <div>
                     <p className="font-bold text-[var(--color-ink)]">

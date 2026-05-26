@@ -46,6 +46,11 @@ export type Product = {
   flashSaleEndsAt?: string | null;
   /** Percentual exibido na Oferta Relâmpago (1–99), definido no admin; null = usar preços ou legado. */
   flashSaleDiscountPercent?: number | null;
+  /** Embalagem fechada (cm/kg) para Melhor Envio; null = SHIPPING_DEFAULT_* no .env. */
+  packageWidthCm?: number | null;
+  packageHeightCm?: number | null;
+  packageLengthCm?: number | null;
+  packageWeightKg?: number | null;
 };
 
 export type Testimonial = {
