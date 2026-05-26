@@ -83,7 +83,7 @@ Em cada console de OAuth, configure a **URL de callback** do NextAuth (ex.: `htt
 
 ## 4. Build e release
 
-- [ ] **Vercel / CI**: definir `DATABASE_URL` e `DIRECT_URL` antes do build — o `postinstall` roda `prisma generate`, que exige essas variáveis no `schema.prisma`.
+- [ ] **Vercel / CI**: definir `DATABASE_URL` e `DIRECT_URL` antes do build (Neon: **Pooled** → `DATABASE_URL`, **Direct** → `DIRECT_URL`). Sem `DIRECT_URL`, o build tenta derivar da pooled (Neon); o ideal é cadastrar as duas em **Project → Settings → Environment Variables** (Production + Preview se usar o mesmo banco).
 - [ ] **Build na Vercel**: o script `npm run build` já executa **`prisma migrate deploy`** antes do `next build`, aplicando migrations no banco apontado pelas env vars (incluindo o primeiro deploy).
 - [ ] **Preview deployments**: se cada PR não tiver um Neon branch/DB separado, as previews vão rodar `migrate deploy` no **mesmo** banco de produção — evite isso (branch de DB no Neon ou envs diferentes por ambiente na Vercel).
 - [ ] `npm ci` (ou `npm install`) e `npm run build` **localmente** só funciona com `.env` válido (Neon ou Postgres acessível), porque o build inclui migrate. Para validar só o front sem DB: `npm run build:next`.

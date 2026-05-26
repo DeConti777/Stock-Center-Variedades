@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "set NODE_OPTIONS=--max-old-space-size=8192 && next dev",
-    "build": "prisma migrate deploy && next build",
+    "build": "node scripts/vercel-build.mjs",
     "build:next": "next build",
     "start": "next start",
     "lint": "eslint",
