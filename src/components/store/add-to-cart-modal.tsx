@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductCard } from "@/components/ui/product-card";
 import { prioritizeVisitedProducts } from "@/lib/catalog";
-import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
+const modalRelatedCarouselClass =
+  "flex snap-x snap-proximity gap-3 overflow-x-auto overscroll-x-contain touch-pan-x pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden [&_.product-card-root]:touch-pan-x [&_.product-card-title]:touch-pan-x [&_.product-card-media_a]:touch-pan-x";
 import { getProductHeroSrc, isProductMediaUrl } from "@/lib/product-media";
 import type { Product } from "@/lib/types";
 import type { RelatedProductsResponse } from "@/app/api/store/related/route";
@@ -201,7 +202,7 @@ export function AddToCartModal({
             </div>
           ) : (
             <div
-              className={`-mx-1 gap-4! pb-2 pt-1 scrollbar-thin ${mobileHorizontalScrollRowClass}`}
+              className={`-mx-1 gap-4! pb-2 pt-1 scrollbar-thin ${modalRelatedCarouselClass}`}
             >
               {relatedOrdered.map((p: Product) => (
                 <div

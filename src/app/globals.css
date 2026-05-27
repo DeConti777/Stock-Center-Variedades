@@ -1469,6 +1469,12 @@ textarea {
     border-radius: 0.375rem;
   }
 
+  .flash-sale-product-grid .product-grid-mobile {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+  }
+
   .product-grid-mobile > * {
     min-width: 0;
   }

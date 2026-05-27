@@ -1,11 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { formatCurrency, getProductImageUrl } from "@/lib/catalog";
-import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
-import { getFlashSaleDisplayPercent, isFlashSaleActive } from "@/lib/flash-sale";
+import { MobileProductGrid } from "@/components/ui/mobile-product-grid";
+import { isFlashSaleActive } from "@/lib/flash-sale";
 import type { Product } from "@/lib/types";
 
 function LightningGlyph({ className }: { className?: string }) {
@@ -30,9 +28,7 @@ function pad2(n: number) {
 export function MobileFlashSaleCarousel({ products }: { products: Product[] }) {
   const deals = useMemo(() => {
     const list = products.filter(
-      (p) =>
-        isFlashSaleActive(p) &&
-        p.flashSaleEndsAt != null,
+      (p) => isFlashSaleActive(p) && p.flashSaleEndsAt != null,
     );
     return [...list].sort((a, b) => {
       const endA = new Date(a.flashSaleEndsAt!).getTime();
@@ -108,59 +104,8 @@ export function MobileFlashSaleCarousel({ products }: { products: Product[] }) {
         </div>
       </div>
 
-      <div
-        className={`-mr-1 gap-2! pl-0.5 pr-1 ${mobileHorizontalScrollRowClass}`}
-      >
-        {deals.map((product) => {
-          const href = `/produto/${product.slug}`;
-          const img = getProductImageUrl(product, 0);
-          const hasDiscount =
-            product.originalPrice != null &&
-            product.originalPrice > product.price;
-          const pct = getFlashSaleDisplayPercent(product);
-
-          return (
-            <Link
-              key={product.id}
-              href={href}
-              className="relative w-[7.75rem] shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-[rgba(220,38,38,0.15)]"
-            >
-              {pct > 0 ? (
-                <span className="absolute left-1 top-1 z-10 inline-flex items-center gap-0.5 rounded-md bg-[#ffd61f] px-1 py-0.5 text-[10px] font-black text-[var(--color-ink)] shadow-sm">
-                  <LightningGlyph className="h-2.5 w-2.5" />-{pct}%
-                </span>
-              ) : null}
-              <div className="relative aspect-square w-full bg-[var(--color-soft)]">
-                {img.startsWith("/") ? (
-                  <Image
-                    src={img}
-                    alt={product.name}
-                    fill
-                    className="object-cover"
-                    sizes="124px"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- URLs externas
-                  <img
-                    src={img}
-                    alt={product.name}
-                    className="h-full w-full object-cover"
-                  />
-                )}
-              </div>
-              <div className="pointer-events-none absolute bottom-2 left-1/2 flex w-[90%] -translate-x-1/2 flex-col items-center rounded-lg bg-white/95 px-2 py-1 shadow-sm ring-1 ring-white/80">
-                {hasDiscount && product.originalPrice ? (
-                  <span className="text-[10px] font-medium leading-none text-[var(--color-ink)] line-through">
-                    {formatCurrency(product.originalPrice)}
-                  </span>
-                ) : null}
-                <span className="mt-0.5 text-sm font-black leading-none text-[#d5002f]">
-                  {formatCurrency(product.price)}
-                </span>
-              </div>
-            </Link>
-          );
-        })}
+      <div className="flash-sale-product-grid mt-3 rounded-xl bg-white/95 p-2">
+        <MobileProductGrid products={deals} />
       </div>
     </div>
   );

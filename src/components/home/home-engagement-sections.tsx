@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useStore } from "@/components/store/store-provider";
-import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
 import { ProductCard } from "@/components/ui/product-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { Product } from "@/lib/types";
@@ -18,16 +17,16 @@ export function TopRankedShelf({ products }: { products: Product[] }) {
         title="Produtos mais populares com prova social forte."
         description="Ranking com base em volume de avaliacoes para facilitar a decisao de compra."
       />
-      <div className={`mt-8 pb-2 md:hidden ${mobileHorizontalScrollRowClass}`}>
+      <div className="product-grid-mobile mt-8 grid gap-2 md:hidden">
         {ranked.map((product, index) => (
           <article
             key={product.id}
-            className="relative w-[84%] min-w-[84%] snap-start rounded-[1.25rem] border border-[var(--color-line)] bg-white p-3 shadow-[var(--shadow-soft)]"
+            className="relative min-w-0 rounded-[1.25rem] border border-[var(--color-line)] bg-white p-2 shadow-[var(--shadow-soft)]"
           >
-            <span className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-ink)] text-sm font-black text-white">
+            <span className="absolute left-2 top-2 z-[1] inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-ink)] text-xs font-black text-white">
               {index + 1}
             </span>
-            <div className="pt-8">
+            <div className="pt-6">
               <ProductCard product={product} />
             </div>
           </article>

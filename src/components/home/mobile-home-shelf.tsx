@@ -5,11 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useStore } from "@/components/store/store-provider";
 import { MobileFlashSaleCarousel } from "@/components/home/mobile-flash-sale-carousel";
-import { MobileInspiredCarousel } from "@/components/home/mobile-inspired-carousel";
-import {
-  MobileCompactStripCarousel,
-  MobileCompactStripRow,
-} from "@/components/home/mobile-compact-strip";
+import { MobileProductGrid } from "@/components/ui/mobile-product-grid";
 import { formatCurrency, getProductImageUrl } from "@/lib/catalog";
 import type { Product } from "@/lib/types";
 
@@ -162,10 +158,7 @@ export function MobileHomeShelf({
               Ver catalogo
             </Link>
           </div>
-          <MobileCompactStripRow
-            products={visitedStrip}
-            ariaLabel="Visto recentemente"
-          />
+          <MobileProductGrid products={visitedStrip} className="px-4" />
         </div>
       ) : null}
 
@@ -182,7 +175,7 @@ export function MobileHomeShelf({
               Ver mais
             </Link>
           </div>
-          <MobileInspiredCarousel products={inspired} />
+          <MobileProductGrid products={inspired} className="px-4" />
         </div>
       ) : null}
 
@@ -199,10 +192,7 @@ export function MobileHomeShelf({
               Ver mais
             </Link>
           </div>
-          <MobileCompactStripCarousel
-            products={relatedToVisited}
-            ariaLabel="Quem viu este, tambem viu"
-          />
+          <MobileProductGrid products={relatedToVisited} className="px-4" />
         </div>
       ) : null}
     </section>
