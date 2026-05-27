@@ -59,9 +59,12 @@ export function ProductCardMedia({
     const start = pdpTouchStartRef.current;
     const touch = event.touches[0];
     if (!start || !touch) return;
+    const dx = Math.abs(touch.clientX - start.x);
+    const dy = Math.abs(touch.clientY - start.y);
+    const threshold = 10;
     if (
-      Math.abs(touch.clientX - start.x) > 10 ||
-      Math.abs(touch.clientY - start.y) > 10
+      (dx > dy && dx > threshold) ||
+      (dy > dx && dy > threshold)
     ) {
       pdpTouchMovedRef.current = true;
     }
@@ -180,7 +183,7 @@ export function ProductCardMedia({
         href={href}
         scroll
         aria-label={`Ver produto ${product.name}`}
-        className="absolute inset-0 z-[1] cursor-pointer touch-pan-y rounded-[1rem]"
+        className="absolute inset-0 z-[1] cursor-pointer rounded-[1rem]"
         onClick={(event) => {
           handlePdpClick(event);
           if (event.defaultPrevented) return;

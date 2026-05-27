@@ -8,14 +8,12 @@ import {
   formatCurrency,
   getProductImageUrl,
 } from "@/lib/catalog";
+import { mobileHorizontalScrollRowPaddedClass } from "@/lib/mobile-scroll-row";
 import { getProductHeroSrc } from "@/lib/product-media";
 import type { Product } from "@/lib/types";
 
 export const STRIP_CARD_WIDTH = "9.5rem";
 const STRIP_IMAGE_SIZE = "9.5rem";
-
-const compactStripScrollRowClass =
-  "flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-1 pl-4 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 function StripProductImage({ src, alt }: { src: string; alt: string }) {
   return (
@@ -51,7 +49,7 @@ export function CompactProductStripItem({ product }: { product: Product }) {
   return (
     <Link
       href={href}
-      className="flex shrink-0 snap-start touch-pan-y flex-col overflow-hidden rounded-2xl border border-[var(--color-line)] bg-white shadow-[var(--shadow-soft)] transition hover:border-[var(--color-primary)]"
+      className="flex shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-[var(--color-line)] bg-white shadow-[var(--shadow-soft)] transition hover:border-[var(--color-primary)]"
       style={{ width: STRIP_CARD_WIDTH, minHeight: `calc(${STRIP_IMAGE_SIZE} + 4.75rem)` }}
     >
       <StripProductImage src={img} alt={product.name} />
@@ -81,7 +79,7 @@ export function MobileCompactStripRow({
   if (!products.length) return null;
 
   return (
-    <div className={compactStripScrollRowClass} aria-label={ariaLabel}>
+    <div className={mobileHorizontalScrollRowPaddedClass} aria-label={ariaLabel}>
       {products.map((product) => (
         <CompactProductStripItem key={product.id} product={product} />
       ))}

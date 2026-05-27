@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatCurrency, getProductImageUrl } from "@/lib/catalog";
+import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
 import { getFlashSaleDisplayPercent, isFlashSaleActive } from "@/lib/flash-sale";
 import type { Product } from "@/lib/types";
 
@@ -107,7 +108,9 @@ export function MobileFlashSaleCarousel({ products }: { products: Product[] }) {
         </div>
       </div>
 
-      <div className="-mr-1 flex gap-2 overflow-x-auto pb-1 pl-0.5 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        className={`-mr-1 gap-2! pl-0.5 pr-1 ${mobileHorizontalScrollRowClass}`}
+      >
         {deals.map((product) => {
           const href = `/produto/${product.slug}`;
           const img = getProductImageUrl(product, 0);

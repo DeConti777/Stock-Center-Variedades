@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useStore } from "@/components/store/store-provider";
+import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
 import { ProductCard } from "@/components/ui/product-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { Product } from "@/lib/types";
@@ -17,7 +18,7 @@ export function TopRankedShelf({ products }: { products: Product[] }) {
         title="Produtos mais populares com prova social forte."
         description="Ranking com base em volume de avaliacoes para facilitar a decisao de compra."
       />
-      <div className="mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:hidden">
+      <div className={`mt-8 pb-2 md:hidden ${mobileHorizontalScrollRowClass}`}>
         {ranked.map((product, index) => (
           <article
             key={product.id}

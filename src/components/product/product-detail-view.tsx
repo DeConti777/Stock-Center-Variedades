@@ -230,7 +230,7 @@ export function ProductDetailView({
       <section className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-4">
           <div
-            className={`relative flex aspect-square touch-pan-y items-end overflow-hidden rounded-[2.5rem] p-0 shadow-[0_30px_90px_rgba(15,23,42,0.1)] sm:p-6 ${
+            className={`relative flex aspect-square touch-pan-x items-end overflow-hidden rounded-[2.5rem] p-0 shadow-[0_30px_90px_rgba(15,23,42,0.1)] sm:p-6 ${
               isProductMediaUrl(selectedImage) ? "bg-[var(--color-surface)]" : ""
             }`}
             style={

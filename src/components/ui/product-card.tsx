@@ -38,7 +38,7 @@ export function ProductCard({
 
   return (
     <article
-      className={`product-card-root premium-card group flex h-full min-w-0 touch-pan-y flex-col overflow-hidden rounded-[1.25rem] transition duration-300 hover:border-[rgba(201,151,40,0.55)] hover:shadow-[0_28px_80px_rgba(10,10,10,0.12)] ${
+      className={`product-card-root premium-card group flex h-full min-w-0 flex-col overflow-hidden rounded-[1.25rem] transition duration-300 hover:border-[rgba(201,151,40,0.55)] hover:shadow-[0_28px_80px_rgba(10,10,10,0.12)] ${
         compact ? "hover:-translate-y-0" : "hover:-translate-y-1"
       }`}
     >
@@ -68,7 +68,7 @@ export function ProductCard({
               href={productHref}
               scroll
               onClick={onBeforeProductNavigate ? handleNavigateToPdp : undefined}
-              className={`product-card-title mt-1 block touch-pan-y line-clamp-2 font-bold text-[var(--color-ink)] sm:mt-2 ${
+              className={`product-card-title mt-1 block line-clamp-2 font-bold text-[var(--color-ink)] sm:mt-2 ${
                 compact
                   ? "text-xs leading-snug sm:text-sm"
                   : "text-sm leading-5 sm:text-lg"

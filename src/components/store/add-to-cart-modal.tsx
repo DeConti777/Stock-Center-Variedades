@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductCard } from "@/components/ui/product-card";
 import { prioritizeVisitedProducts } from "@/lib/catalog";
+import { mobileHorizontalScrollRowClass } from "@/lib/mobile-scroll-row";
 import { getProductHeroSrc, isProductMediaUrl } from "@/lib/product-media";
 import type { Product } from "@/lib/types";
 import type { RelatedProductsResponse } from "@/app/api/store/related/route";
@@ -200,8 +201,7 @@ export function AddToCartModal({
             </div>
           ) : (
             <div
-              className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 pt-1 scrollbar-thin"
-              style={{ WebkitOverflowScrolling: "touch" }}
+              className={`-mx-1 gap-4! pb-2 pt-1 scrollbar-thin ${mobileHorizontalScrollRowClass}`}
             >
               {relatedOrdered.map((p: Product) => (
                 <div
