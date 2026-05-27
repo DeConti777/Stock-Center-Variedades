@@ -33,9 +33,11 @@ function getPublicReviewerName(name: string | null | undefined): string {
 }
 
 export async function generateStaticParams() {
-  const products = await getProducts();
+  const products = await getProducts(300);
   return products.map((product) => ({ slug: product.slug }));
 }
+
+export const revalidate = 120;
 
 export async function generateMetadata({
   params,

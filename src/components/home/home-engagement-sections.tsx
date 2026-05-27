@@ -11,13 +11,28 @@ export function TopRankedShelf({ products }: { products: Product[] }) {
   if (ranked.length === 0) return null;
 
   return (
-    <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:mt-16 sm:px-6 lg:px-8">
       <SectionHeading
         eyebrow="Top 10 da semana"
         title="Produtos mais populares com prova social forte."
         description="Ranking com base em volume de avaliacoes para facilitar a decisao de compra."
       />
-      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:hidden">
+        {ranked.map((product, index) => (
+          <article
+            key={product.id}
+            className="relative w-[84%] min-w-[84%] snap-start rounded-[1.25rem] border border-[var(--color-line)] bg-white p-3 shadow-[var(--shadow-soft)]"
+          >
+            <span className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-ink)] text-sm font-black text-white">
+              {index + 1}
+            </span>
+            <div className="pt-8">
+              <ProductCard product={product} />
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="mt-8 hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-5">
         {ranked.map((product, index) => (
           <article
             key={product.id}
@@ -46,7 +61,7 @@ export function BudgetFinderSection({ products }: { products: Product[] }) {
   const filtered = products.filter((product) => product.stock > 0 && product.price <= activeRange).slice(0, 8);
 
   return (
-    <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:mt-16 sm:px-6 lg:px-8">
       <SectionHeading
         eyebrow="Achadinhos por faixa"
         title="Explore por preco e encontre mais produtos sem sair da home."
@@ -141,10 +156,10 @@ export function RelatedToVisitedSection({ products }: { products: Product[] }) {
   if (related.length === 0) return null;
 
   return (
-    <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:mt-16 sm:px-6 lg:px-8">
       <SectionHeading
         eyebrow="Sugestoes para voce"
-        title="Quem viu este, tambem viu"
+        title="Produtos que combinam com o que voce buscou"
         description="Recomendacoes com base na sua navegacao recente para aumentar relevancia."
       />
       <div className="product-grid-mobile mt-8 grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">

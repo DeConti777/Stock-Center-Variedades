@@ -128,7 +128,7 @@ function parseArgs(argv: string[]) {
   const countArg = argv.find((item) => item.startsWith("--count="));
   const countParsed = countArg ? Number(countArg.replace("--count=", "")) : NaN;
   const count = Number.isFinite(countParsed)
-    ? Math.max(1, Math.min(1000, Math.floor(countParsed)))
+    ? Math.max(1, Math.min(10000, Math.floor(countParsed)))
     : DEFAULT_COUNT;
   return {
     dryRun: args.has("--dry-run"),

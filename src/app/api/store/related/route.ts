@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProducts, getRelatedProducts } from "@/lib/catalog-server";
+import { getProductById, getRelatedProducts } from "@/lib/catalog-server";
 import type { Product } from "@/lib/types";
 
 const RELATED_LIMIT = 12;
@@ -30,8 +30,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "productId obrigatorio." }, { status: 400 });
   }
 
-  const products = await getProducts();
-  const base = products.find((p) => p.id === productId);
+  const base = await getProductById(productId);
 
   if (!base) {
     return NextResponse.json({ error: "Produto nao encontrado." }, { status: 404 });

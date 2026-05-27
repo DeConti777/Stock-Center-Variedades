@@ -195,7 +195,7 @@ export function FeaturedProducts({
       className={`mx-auto w-full max-w-7xl rounded-[1.5rem] px-4 sm:px-6 lg:px-8 ${
         flushTopOnMobile
           ? "mt-0 pb-6 pt-3 sm:mt-18 sm:py-12"
-          : "mt-10 py-8 sm:mt-18 sm:py-12"
+          : "mt-6 py-8 sm:mt-18 sm:py-12"
       } ${
         dark
           ? "bg-[var(--color-ink)] text-white shadow-[0_28px_80px_rgba(0,0,0,0.18)]"
@@ -281,7 +281,7 @@ export function SocialProof() {
 
 export function TestimonialSection() {
   return (
-    <section className="mx-auto mt-18 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:mt-18 sm:px-6 lg:px-8">
       <SectionHeading
         eyebrow="Quem comprou recomenda"
         title="Depoimentos de clientes sobre entrega, preco e atendimento."
@@ -323,7 +323,7 @@ export function TestimonialSection() {
 
 export function NewsletterSection() {
   return (
-    <section className="mx-auto mt-18 w-full max-w-5xl px-4 sm:px-6 lg:px-8">
+    <section className="mx-auto mt-8 w-full max-w-5xl px-4 sm:mt-18 sm:px-6 lg:px-8">
       <div className="overflow-hidden rounded-[1.5rem] border border-[rgba(243,210,107,0.28)] bg-[var(--color-ink)] px-6 py-10 text-white shadow-[0_28px_80px_rgba(0,0,0,0.18)] sm:px-10">
         <SectionHeading
           eyebrow="Newsletter"

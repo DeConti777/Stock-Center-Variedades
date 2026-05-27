@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MobileHomeShelf } from "@/components/home/mobile-home-shelf";
 import {
-  BenefitsStrip,
   BudgetFinderSection,
   CouponClaimBanner,
   CategoryShowcase,
@@ -15,17 +14,21 @@ import {
   TestimonialSection,
   TopRankedShelf,
 } from "@/components/home/home-sections";
-import { getProducts } from "@/lib/catalog-server";
+import { getProducts, getProductsByTag } from "@/lib/catalog-server";
 
 export const metadata: Metadata = {
   title: "Stock Center Variedades",
 };
 
+export const revalidate = 60;
+
 export default async function HomePage() {
-  const allProducts = await getProducts();
-  const featuredProducts = allProducts.filter((p) => p.tags.includes("featured"));
-  const bestSellers = allProducts.filter((p) => p.tags.includes("bestSeller"));
-  const promoProducts = allProducts.filter((p) => p.tags.includes("promotion"));
+  const [allProducts, featuredProducts, bestSellers, promoProducts] = await Promise.all([
+    getProducts(240),
+    getProductsByTag("featured", 48),
+    getProductsByTag("bestSeller", 48),
+    getProductsByTag("promotion", 48),
+  ]);
 
   return (
     <div>
@@ -47,7 +50,6 @@ export default async function HomePage() {
         products={featuredProducts}
         flushTopOnMobile
       />
-      <BenefitsStrip />
       <FeaturedProducts
         eyebrow="Mais vendidos"
         title="Quem compra volta porque encontra variedade, preco e praticidade."
@@ -55,7 +57,6 @@ export default async function HomePage() {
         products={bestSellers}
         accent="dark"
       />
-      <SocialProof />
       <TopRankedShelf products={bestSellers} />
       <BudgetFinderSection products={allProducts} />
       <FeaturedProducts
@@ -66,6 +67,7 @@ export default async function HomePage() {
       />
       <TestimonialSection />
       <RelatedToVisitedSection products={allProducts} />
+      <SocialProof />
       <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-5 rounded-[1.25rem] border border-[var(--color-line)] bg-white p-5 shadow-[var(--shadow-soft)] sm:grid-cols-2 sm:p-6 lg:grid-cols-4">
           <article>

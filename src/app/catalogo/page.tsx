@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ProductCatalogView } from "@/components/catalog/product-catalog-view";
-import { getCatalogFilters, getProducts } from "@/lib/catalog-server";
+import { getCatalogFilters, getCatalogPageProducts, getProducts } from "@/lib/catalog-server";
 
 export const metadata: Metadata = {
   title: "Catalogo",
@@ -9,8 +9,24 @@ export const metadata: Metadata = {
     "Catalogo completo da Stock Center Variedades com filtros por categoria, faixa de preco e promocoes.",
 };
 
-export default async function CatalogPage() {
-  const products = await getProducts();
+export const revalidate = 60;
+
+export default async function CatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; origem?: string }>;
+}) {
+  const params = await searchParams;
+  const origem = params.origem ?? "";
+  const page = Number(params.page ?? "1");
+  const useExpandedOriginFeed = origem === "inspirado" || origem === "quem-viu";
+  const data = useExpandedOriginFeed
+    ? {
+        products: await getProducts(240),
+        page: 1,
+        totalPages: 1,
+      }
+    : await getCatalogPageProducts(page, 72);
 
   return (
     <Suspense
@@ -20,7 +36,12 @@ export default async function CatalogPage() {
         </div>
       }
     >
-      <ProductCatalogView products={products} filters={getCatalogFilters()} />
+      <ProductCatalogView
+        products={data.products}
+        filters={getCatalogFilters()}
+        page={data.page}
+        totalPages={data.totalPages}
+      />
     </Suspense>
   );
 }

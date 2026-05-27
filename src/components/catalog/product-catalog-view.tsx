@@ -14,11 +14,15 @@ import type { CatalogFilters, Product } from "@/lib/types";
 type ProductCatalogViewProps = {
   products: Product[];
   filters: CatalogFilters;
+  page: number;
+  totalPages: number;
 };
 
 export function ProductCatalogView({
   products,
   filters,
+  page,
+  totalPages,
 }: ProductCatalogViewProps) {
   const { visitedProductIds } = useStore();
   const router = useRouter();
@@ -26,6 +30,7 @@ export function ProductCatalogView({
   const searchParams = useSearchParams();
   const qFromUrl = searchParams.get("q") ?? "";
   const categoriaFromUrl = searchParams.get("categoria")?.trim() ?? "";
+  const originFromUrl = searchParams.get("origem") ?? "";
   const [query, setQuery] = useState(qFromUrl);
 
   useEffect(() => {
@@ -41,6 +46,7 @@ export function ProductCatalogView({
       } else {
         next.delete("q");
       }
+      next.delete("page");
       const qs = next.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -59,6 +65,21 @@ export function ProductCatalogView({
     setQuery("");
     syncQueryToUrl("");
   }, [syncQueryToUrl]);
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      if (nextPage < 1 || nextPage > totalPages || nextPage === page) return;
+      const next = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) {
+        next.delete("page");
+      } else {
+        next.set("page", String(nextPage));
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: true });
+    },
+    [page, pathname, router, searchParams, totalPages],
+  );
 
   const selectedCategory = useMemo(() => {
     if (!categoriaFromUrl) return "Todas";
@@ -95,6 +116,37 @@ export function ProductCatalogView({
       : [...products];
 
     current = current.filter((product) => product.stock > 0);
+
+    if (!trimmedQuery && originFromUrl === "inspirado") {
+      const byId = new Map(current.map((product) => [product.id, product]));
+      const visited = visitedProductIds
+        .map((id) => byId.get(id))
+        .filter((product): product is Product => product !== undefined);
+      const visitedCategories = new Set(visited.map((product) => product.category));
+      if (visitedCategories.size > 0) {
+        const inVisitedCategories = current.filter((product) =>
+          visitedCategories.has(product.category),
+        );
+        const remaining = current.filter((product) => !visitedCategories.has(product.category));
+        current = [...inVisitedCategories, ...remaining];
+      }
+    }
+
+    if (!trimmedQuery && originFromUrl === "quem-viu") {
+      const byId = new Map(current.map((product) => [product.id, product]));
+      const latestVisited = byId.get(visitedProductIds[0] ?? "");
+      if (latestVisited) {
+        const sameCategory = current.filter(
+          (product) =>
+            product.id !== latestVisited.id && product.category === latestVisited.category,
+        );
+        const remaining = current.filter(
+          (product) =>
+            product.id === latestVisited.id || product.category !== latestVisited.category,
+        );
+        current = [...sameCategory, ...remaining];
+      }
+    }
 
     if (selectedCategory !== "Todas") {
       current = current.filter((product) => product.category === selectedCategory);
@@ -137,6 +189,7 @@ export function ProductCatalogView({
   }, [
     filters.priceRanges,
     flashSaleOnly,
+    originFromUrl,
     products,
     promotionOnly,
     query,
@@ -150,8 +203,20 @@ export function ProductCatalogView({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
       <PageHighlight
-        title="Catalogo Completo"
-        description="Tudo que você precisa em um único lugar"
+        title={
+          originFromUrl === "inspirado"
+            ? "Mais produtos inspirados em voce"
+            : originFromUrl === "quem-viu"
+              ? "Mais produtos relacionados"
+              : "Catalogo Completo"
+        }
+        description={
+          originFromUrl === "inspirado"
+            ? "Selecao ampliada com base na sua navegacao recente."
+            : originFromUrl === "quem-viu"
+              ? "Mais opcoes parecidas com o que voce visitou."
+              : "Tudo que você precisa em um único lugar"
+        }
       />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -207,6 +272,7 @@ export function ProductCatalogView({
                   } else {
                     next.set("categoria", value);
                   }
+                  next.delete("page");
                   const qs = next.toString();
                   router.replace(qs ? `${pathname}?${qs}` : pathname, {
                     scroll: false,
@@ -256,6 +322,7 @@ export function ProductCatalogView({
                   } else {
                     next.delete("flashSale");
                   }
+                  next.delete("page");
                   const qs = next.toString();
                   router.replace(qs ? `${pathname}?${qs}` : pathname, {
                     scroll: false,
@@ -323,6 +390,30 @@ export function ProductCatalogView({
               ))}
             </div>
           )}
+
+          {totalPages > 1 ? (
+            <div className="mt-6 flex items-center justify-between rounded-[1.25rem] border border-[var(--color-line)] bg-white px-4 py-3">
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1}
+                className="rounded-full border border-[var(--color-line)] px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <p className="text-sm font-semibold text-[var(--color-muted)]">
+                Pagina {page} de {totalPages}
+              </p>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages}
+                className="rounded-full border border-[var(--color-line)] px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Proxima
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

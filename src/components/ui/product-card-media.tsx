@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type TouchEvent,
+} from "react";
 import {
   buildProductDisplayImages,
   isProductMediaUrl,
@@ -38,6 +45,38 @@ export function ProductCardMedia({
   const selectedImage = displayImages[safeIndex] ?? "#e2e8f0";
   const accent = displayImages[1] ?? displayImages[0] ?? "#e2e8f0";
   const canNavigate = n > 1;
+  const pdpTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pdpTouchMovedRef = useRef(false);
+
+  function handlePdpTouchStart(event: TouchEvent<HTMLAnchorElement>) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    pdpTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    pdpTouchMovedRef.current = false;
+  }
+
+  function handlePdpTouchMove(event: TouchEvent<HTMLAnchorElement>) {
+    const start = pdpTouchStartRef.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+    if (
+      Math.abs(touch.clientX - start.x) > 10 ||
+      Math.abs(touch.clientY - start.y) > 10
+    ) {
+      pdpTouchMovedRef.current = true;
+    }
+  }
+
+  function handlePdpTouchEnd() {
+    pdpTouchStartRef.current = null;
+  }
+
+  function handlePdpClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!pdpTouchMovedRef.current) return;
+    pdpTouchMovedRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   function goPrev(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -63,7 +102,8 @@ export function ProductCardMedia({
           <img
             src={selectedImage}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover"
+            draggable={false}
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           />
           <div className="product-card-media-gradient absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.22))]" />
         </>
@@ -138,9 +178,18 @@ export function ProductCardMedia({
 
       <Link
         href={href}
+        scroll
         aria-label={`Ver produto ${product.name}`}
-        className="absolute inset-0 z-[1] cursor-pointer rounded-[1rem]"
-        onClick={onNavigateToPdp}
+        className="absolute inset-0 z-[1] cursor-pointer touch-pan-y rounded-[1rem]"
+        onClick={(event) => {
+          handlePdpClick(event);
+          if (event.defaultPrevented) return;
+          onNavigateToPdp?.(event);
+        }}
+        onTouchStart={handlePdpTouchStart}
+        onTouchMove={handlePdpTouchMove}
+        onTouchEnd={handlePdpTouchEnd}
+        onTouchCancel={handlePdpTouchEnd}
       />
     </div>
   );

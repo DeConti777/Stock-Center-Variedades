@@ -171,18 +171,34 @@ export function MobileHomeShelf({
 
       {inspired.length > 0 ? (
         <div className="mt-5">
-          <h2 className="mb-3 px-4 text-sm font-black text-[var(--color-ink)]">
-            Inspirado no que voce viu
-          </h2>
+          <div className="mb-3 flex items-center justify-between px-4">
+            <h2 className="text-sm font-black text-[var(--color-ink)]">
+              Inspirado no que voce viu
+            </h2>
+            <Link
+              href="/catalogo?origem=inspirado"
+              className="text-xs font-bold text-[var(--color-primary)]"
+            >
+              Ver mais
+            </Link>
+          </div>
           <MobileInspiredCarousel products={inspired} />
         </div>
       ) : null}
 
       {relatedToVisited.length > 0 ? (
         <div className="mt-5 pb-3">
-          <h2 className="mb-3 px-4 text-sm font-black text-[var(--color-ink)]">
-            Quem viu este, tambem viu
-          </h2>
+          <div className="mb-3 flex items-center justify-between px-4">
+            <h2 className="text-sm font-black text-[var(--color-ink)]">
+              Quem viu este, tambem viu
+            </h2>
+            <Link
+              href="/catalogo?origem=quem-viu"
+              className="text-xs font-bold text-[var(--color-primary)]"
+            >
+              Ver mais
+            </Link>
+          </div>
           <MobileCompactStripCarousel
             products={relatedToVisited}
             ariaLabel="Quem viu este, tambem viu"
