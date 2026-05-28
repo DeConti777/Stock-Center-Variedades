@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductDetailView, type ProductReview } from "@/components/product/product-detail-view";
 import { JsonLd } from "@/components/seo/json-ld";
-import { getProductBySlug, getRelatedProducts, getProducts } from "@/lib/catalog-server";
+import { getProductBySlug, getProducts } from "@/lib/catalog-server";
 import { getAppUrl } from "@/lib/env";
 import { isProductMediaUrl } from "@/lib/product-media";
 import { getPrismaOrNull } from "@/lib/prisma";
@@ -91,23 +91,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   const prisma = getPrismaOrNull();
-  const [relatedProducts, rawReviews] = await Promise.all([
-    getRelatedProducts(product.id),
-    prisma
-      ? prisma.orderItemReview.findMany({
-          where: {
-            orderItem: {
-              productId: product.id,
-            },
+  const rawReviews = prisma
+    ? await prisma.orderItemReview.findMany({
+        where: {
+          orderItem: {
+            productId: product.id,
           },
-          orderBy: { createdAt: "desc" },
-          take: 12,
-          include: {
-            user: { select: { name: true } },
-          },
-        })
-      : Promise.resolve([]),
-  ]);
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        include: {
+          user: { select: { name: true } },
+        },
+      })
+    : [];
   const customerReviews: ProductReview[] = rawReviews.map((review) => ({
     id: review.id,
     rating: review.rating,
@@ -119,32 +116,37 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const productLd = buildProductPageGraph(getAppUrl(), product);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pt-3 pb-8 sm:gap-8 sm:px-6 sm:py-10 lg:px-8">
       <JsonLd data={productLd} />
-      <section className="rounded-[1.6rem] border border-[var(--color-line)] bg-white px-4 py-3 sm:px-5">
+      <section className="rounded-[1.6rem] border border-[var(--color-line)] bg-white px-4 py-2 sm:px-5 sm:py-3">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">
           Produto novo
         </p>
         <p className="mt-1 text-base font-semibold text-[var(--color-ink)] sm:text-lg">
           {product.name}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--color-muted)]">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-muted)] sm:text-sm">
           <Link
             href={`/catalogo?categoria=${encodeURIComponent(product.category)}`}
-            className="font-semibold text-[var(--color-primary)]"
+            className="min-w-0 shrink font-semibold text-[var(--color-primary)]"
           >
-            Ver mais da categoria {product.category}
+            Ver mais em {product.category}
           </Link>
-          <span>•</span>
-          <span>{product.rating.toFixed(1)} ★</span>
-          <span>•</span>
-          <span>{product.reviews} avaliacoes</span>
+          <span className="shrink-0" aria-hidden>
+            •
+          </span>
+          <span className="shrink-0 whitespace-nowrap">
+            {product.rating.toFixed(1)} ★
+          </span>
+          <span className="shrink-0" aria-hidden>
+            •
+          </span>
+          <span className="shrink-0 whitespace-nowrap">{product.reviews} avaliacoes</span>
         </div>
       </section>
       <ProductDetailView
         key={product.id}
         product={product}
-        relatedProducts={relatedProducts}
         customerReviews={customerReviews}
       />
     </div>

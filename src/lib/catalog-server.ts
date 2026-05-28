@@ -1,7 +1,7 @@
 import { categories, products as fallbackProducts } from "@/lib/site-data";
 import type { CatalogFilters, Product, ProductTag } from "@/lib/types";
 import { getPrismaOrNull } from "@/lib/prisma";
-import { applyFlashSalePricing } from "@/lib/flash-sale";
+import { applyFlashSalePricing, isFlashSaleActive } from "@/lib/flash-sale";
 import {
   expireStaleFlashSales,
   fetchFlashSaleDiscountMap,
@@ -9,10 +9,35 @@ import {
 } from "@/lib/prisma-product-map";
 import type { Product as PrismaProduct } from "@prisma/client";
 
+export const RELATED_PRODUCTS_LIMIT = 12;
+
 const byDemandDesc = (a: Product, b: Product) => {
   if (b.reviews !== a.reviews) return b.reviews - a.reviews;
   return b.rating - a.rating;
 };
+
+function scoreRelated(base: Product, candidate: Product): number {
+  const sameCategory = base.category === candidate.category ? 1000 : 0;
+  const tagOverlap = base.tags.filter((tag) => candidate.tags.includes(tag)).length;
+  return sameCategory + tagOverlap * 100 + candidate.reviews * 10 + candidate.rating;
+}
+
+function sortByRelatedScore(base: Product, candidates: Product[]): Product[] {
+  return [...candidates].sort((a, b) => scoreRelated(base, b) - scoreRelated(base, a));
+}
+
+function pickRelated(base: Product, candidates: Product[], limit: number): Product[] {
+  const eligible = candidates.filter((p) => p.id !== base.id && p.stock > 0);
+  const sameCategory = sortByRelatedScore(
+    base,
+    eligible.filter((p) => p.category === base.category),
+  );
+  const complementary = sortByRelatedScore(
+    base,
+    eligible.filter((p) => p.category !== base.category),
+  );
+  return [...sameCategory, ...complementary].slice(0, limit);
+}
 
 function applyDiscounts(
   mapped: Product[],
@@ -66,6 +91,36 @@ export async function getProducts(limit?: number) {
   const dbProducts = await getProductsFromDb(limit);
   if (dbProducts) return dbProducts;
   return limit ? fallbackProducts.slice(0, limit) : fallbackProducts;
+}
+
+/** Ofertas relampago ativas (publicadas, com estoque e prazo futuro). */
+export async function getActiveFlashSaleProducts(limit = 48): Promise<Product[]> {
+  const prisma = getPrismaOrNull();
+  if (!prisma) {
+    const active = fallbackProducts.filter((p) => isFlashSaleActive(p));
+    return limit ? active.slice(0, limit) : active;
+  }
+
+  try {
+    await expireStaleFlashSales(prisma);
+    const now = new Date();
+    const rows = await prisma.product.findMany({
+      where: {
+        published: true,
+        stock: { gt: 0 },
+        flashSaleEndsAt: { gt: now },
+      },
+      orderBy: { flashSaleEndsAt: "asc" },
+      ...(limit ? { take: limit } : {}),
+    });
+    return mapDbProducts(prisma, rows);
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[catalog-server] Falha ao ler ofertas relampago.", error);
+    }
+    const active = fallbackProducts.filter((p) => isFlashSaleActive(p));
+    return limit ? active.slice(0, limit) : active;
+  }
 }
 
 export async function getCatalogPageProducts(page = 1, pageSize = 60) {
@@ -217,47 +272,47 @@ export async function getProductById(id: string) {
   return mapped ?? null;
 }
 
-export async function getRelatedProducts(productId: string, limit = 4) {
-  const product = await getProductById(productId);
+export async function getRelatedProducts(
+  productId: string,
+  limit = RELATED_PRODUCTS_LIMIT,
+  baseProduct?: Product | null,
+) {
+  const product = baseProduct ?? (await getProductById(productId));
   if (!product) return [];
 
   const prisma = getPrismaOrNull();
   if (!prisma) {
     const products = await getProducts(300);
-    const sameCategory = products
-      .filter((p) => p.id !== productId && p.category === product.category)
-      .sort(byDemandDesc);
-    if (sameCategory.length >= limit) return sameCategory.slice(0, limit);
-    const complementary = products
-      .filter(
-        (p) =>
-          p.id !== productId &&
-          p.category !== product.category &&
-          !sameCategory.some((candidate) => candidate.id === p.id),
-      )
-      .sort(byDemandDesc);
-    return [...sameCategory, ...complementary].slice(0, limit);
+    return pickRelated(product, products, limit);
   }
 
+  const poolSize = Math.min(limit * 4, 48);
   const baseWhere = { published: true, stock: { gt: 0 }, id: { not: productId } } as const;
+
   const sameCategoryRows = await prisma.product.findMany({
     where: { ...baseWhere, category: product.category },
-    orderBy: [{ reviews: "desc" }, { rating: "desc" }],
-    take: limit,
+    take: poolSize,
   });
-  if (sameCategoryRows.length >= limit) {
-    return mapDbProducts(prisma, sameCategoryRows);
+  const mappedSame = await mapDbProducts(prisma, sameCategoryRows);
+  const rankedSame = sortByRelatedScore(product, mappedSame).slice(0, limit);
+
+  if (rankedSame.length >= limit) {
+    return rankedSame;
   }
+
+  const excludeIds = [productId, ...rankedSame.map((p) => p.id)];
   const complementaryRows = await prisma.product.findMany({
     where: {
       ...baseWhere,
       category: { not: product.category },
-      id: { notIn: sameCategoryRows.map((row) => row.id).concat(productId) },
+      id: { notIn: excludeIds },
     },
-    orderBy: [{ reviews: "desc" }, { rating: "desc" }],
-    take: limit - sameCategoryRows.length,
+    take: poolSize,
   });
-  return mapDbProducts(prisma, [...sameCategoryRows, ...complementaryRows]);
+  const mappedComplementary = await mapDbProducts(prisma, complementaryRows);
+  const rankedComplementary = sortByRelatedScore(product, mappedComplementary);
+
+  return [...rankedSame, ...rankedComplementary].slice(0, limit);
 }
 
 export function getCatalogFilters(): CatalogFilters {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { uploadProductImageClient } from "@/lib/admin-product-upload";
 import { dedupeImageUrlsExact, mergeCommaSeparatedUniqueImageUrls, parseCommaSeparatedUniqueImageUrls } from "@/lib/product-json";
-import { isFlashSaleActive } from "@/lib/flash-sale";
+import { getFlashSaleAdminStatus, isFlashSaleActive } from "@/lib/flash-sale";
 import { parsePackageFieldsFromForm } from "@/lib/package-dimensions";
 import type { Product, ProductTag } from "@/lib/types";
 import {
@@ -386,9 +386,65 @@ export function ProductEditModal({
     }
   }
 
+  async function handleRenewFlashSale() {
+    if (!product || !draft) return;
+    const fp = Number(draft.flashSaleDiscountPercent);
+    if (
+      !Number.isFinite(fp) ||
+      fp < 1 ||
+      fp > 99 ||
+      Math.floor(fp) !== fp
+    ) {
+      setFieldErrors({
+        flashSaleDiscountPercent:
+          "Informe um inteiro entre 1 e 99 para renovar a oferta.",
+      });
+      setError("Defina o percentual da oferta antes de renovar as 24 horas.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      const res = await fetch("/api/admin/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: product.id,
+          flashSaleRenew: true,
+          flashSaleActive: true,
+          flashSaleDiscountPercent: fp,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { product?: Product; error?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(json?.error || "Nao foi possivel renovar a oferta.");
+      }
+      if (!json?.product) {
+        throw new Error("Resposta do servidor sem dados do produto.");
+      }
+      onSaved(json.product);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao renovar oferta.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!open || !product || !draft) {
     return null;
   }
+
+  const flashAdminStatus = getFlashSaleAdminStatus(product);
+  const draftStock = Number(draft.stock);
+  const flashBlockedByStock =
+    draft.flashSaleActive &&
+    Number.isFinite(draftStock) &&
+    draftStock <= 0;
 
   const inputClass =
     "mt-2 w-full rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm";
@@ -768,6 +824,24 @@ export function ProductEditModal({
                       </span>
                     )}
                   </label>
+                ) : null}
+                {flashBlockedByStock ? (
+                  <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    Estoque zero: a oferta nao aparece na loja ate repor estoque.
+                  </p>
+                ) : null}
+                {draft.flashSaleActive ||
+                flashAdminStatus === "active" ||
+                flashAdminStatus === "expired" ||
+                flashAdminStatus === "no_stock" ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleRenewFlashSale()}
+                    className="mt-3 rounded-full border border-[var(--color-line)] bg-white px-4 py-2 text-xs font-bold text-[var(--color-ink)] hover:border-[var(--color-primary)] disabled:opacity-50"
+                  >
+                    Renovar janela de 24h
+                  </button>
                 ) : null}
               </div>
             </div>

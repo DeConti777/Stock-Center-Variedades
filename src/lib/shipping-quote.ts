@@ -13,7 +13,7 @@ import type { CartItem } from "@/lib/types";
 export type CartShippingQuote = {
   shippingInCents: number;
   shippingServiceId: string | null;
-  shippingCarrier: string | null;
+  deliveryDays: number | null;
   options: Array<{
     id: number;
     name: string;
@@ -24,6 +24,40 @@ export type CartShippingQuote = {
   source: "melhor_envio" | "fallback";
 };
 
+/** Resposta opaca para vitrine/checkout (sem transportadora). */
+export type PublicShippingQuote = {
+  shippingInCents: number;
+  deliveryDays?: number;
+  quoteSource: "melhor_envio" | "fallback";
+};
+
+/**
+ * Estrategia de cotacao: `cheapest` (padrao) ou `service_id:<n>` (forca servico ME).
+ * @see docs/CHECKLIST-DEPLOY.md
+ */
+export function preferredMelhorEnvioServiceIdFromEnv(): number | null {
+  const raw = process.env.SHIPPING_QUOTE_STRATEGY?.trim() || "cheapest";
+  if (raw.toLowerCase() === "cheapest") {
+    return null;
+  }
+  const match = /^service_id:(\d+)$/i.exec(raw);
+  if (!match) {
+    return null;
+  }
+  const id = Number(match[1]);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+export function toPublicShippingQuote(quote: CartShippingQuote): PublicShippingQuote {
+  return {
+    shippingInCents: quote.shippingInCents,
+    ...(quote.deliveryDays != null && quote.deliveryDays > 0
+      ? { deliveryDays: quote.deliveryDays }
+      : {}),
+    quoteSource: quote.source,
+  };
+}
+
 function defaultInsuranceReais() {
   const raw = process.env.SHIPPING_DEFAULT_INSURANCE_REAIS?.trim();
   if (!raw) return 10;
@@ -31,36 +65,40 @@ function defaultInsuranceReais() {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 10;
 }
 
+function fallbackQuote(dest: string): CartShippingQuote {
+  return {
+    shippingInCents: getShippingInCentsFromCep(dest),
+    shippingServiceId: null,
+    deliveryDays: null,
+    options: [],
+    source: "fallback",
+  };
+}
+
+function quoteFromMelhorEnvio(
+  me: NonNullable<Awaited<ReturnType<typeof calculateMelhorEnvioShipment>>>,
+): CartShippingQuote {
+  return {
+    shippingInCents: me.priceCents,
+    shippingServiceId: me.serviceId,
+    deliveryDays: me.deliveryDays > 0 ? me.deliveryDays : null,
+    options: me.options,
+    source: "melhor_envio",
+  };
+}
+
 /** Cotacao sem carrinho (ex.: pagina do produto): medidas do SKU ou padrao da loja. */
 export async function quotePublicShippingCents(
   destinationCepDigits8: string,
   packageSource?: PackageSource | null,
-): Promise<{
-  shippingInCents: number;
-  source: "melhor_envio" | "fallback";
-  options: CartShippingQuote["options"];
-  shippingServiceId: string | null;
-  shippingCarrier: string | null;
-}> {
+): Promise<CartShippingQuote> {
   const dest = destinationCepDigits8.replace(/\D/g, "");
   if (dest.length !== 8) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      source: "fallback",
-      options: [],
-      shippingServiceId: null,
-      shippingCarrier: null,
-    };
+    return fallbackQuote(dest);
   }
 
   if (!isMelhorEnvioConfigured()) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      source: "fallback",
-      options: [],
-      shippingServiceId: null,
-      shippingCarrier: null,
-    };
+    return fallbackQuote(dest);
   }
 
   const origin = process.env.SHIPPING_ORIGIN_POSTAL_CODE!.replace(/\D/g, "");
@@ -77,55 +115,32 @@ export async function quotePublicShippingCents(
     originPostalCode: origin,
     destinationPostalCode: dest,
     products,
+    preferredServiceId: preferredMelhorEnvioServiceIdFromEnv(),
   });
 
   if (!me) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      source: "fallback",
-      options: [],
-      shippingServiceId: null,
-      shippingCarrier: null,
-    };
+    return fallbackQuote(dest);
   }
 
-  const label = `${me.companyName} — ${me.serviceName}`;
-  return {
-    shippingInCents: me.priceCents,
-    source: "melhor_envio",
-    options: me.options,
-    shippingServiceId: me.serviceId,
-    shippingCarrier: label,
-  };
+  return quoteFromMelhorEnvio(me);
 }
 
 /** Cotacao com itens do carrinho (medidas por SKU; seguro = preco de catalogo). */
 export async function quoteCartShipping(
   destinationCepDigits8: string,
   normalizedItems: CartItem[],
-  preferredMelhorEnvioServiceId?: number | null,
+  /** Ignorado no checkout publico; servidor usa SHIPPING_QUOTE_STRATEGY. */
+  _legacyPreferredMelhorEnvioServiceId?: number | null,
 ): Promise<CartShippingQuote> {
   const dest = destinationCepDigits8.replace(/\D/g, "");
   if (dest.length !== 8) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      shippingServiceId: null,
-      shippingCarrier: null,
-      options: [],
-      source: "fallback",
-    };
+    return fallbackQuote(dest);
   }
 
   const items = normalizedItems.filter((i) => i.quantity > 0);
 
   if (!isMelhorEnvioConfigured()) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      shippingServiceId: null,
-      shippingCarrier: null,
-      options: [],
-      source: "fallback",
-    };
+    return fallbackQuote(dest);
   }
 
   const origin = process.env.SHIPPING_ORIGIN_POSTAL_CODE!.replace(/\D/g, "");
@@ -156,38 +171,26 @@ export async function quoteCartShipping(
         ]);
 
   if (products.length === 0) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      shippingServiceId: null,
-      shippingCarrier: null,
-      options: [],
-      source: "fallback",
-    };
+    return fallbackQuote(dest);
   }
+
+  const preferredId =
+    preferredMelhorEnvioServiceIdFromEnv() ??
+    (_legacyPreferredMelhorEnvioServiceId != null &&
+    Number.isFinite(_legacyPreferredMelhorEnvioServiceId)
+      ? _legacyPreferredMelhorEnvioServiceId
+      : null);
 
   const me = await calculateMelhorEnvioShipment({
     originPostalCode: origin,
     destinationPostalCode: dest,
     products,
-    preferredServiceId: preferredMelhorEnvioServiceId ?? null,
+    preferredServiceId: preferredId,
   });
 
   if (!me) {
-    return {
-      shippingInCents: getShippingInCentsFromCep(dest),
-      shippingServiceId: null,
-      shippingCarrier: null,
-      options: [],
-      source: "fallback",
-    };
+    return fallbackQuote(dest);
   }
 
-  const label = `${me.companyName} — ${me.serviceName}`;
-  return {
-    shippingInCents: me.priceCents,
-    shippingServiceId: me.serviceId,
-    shippingCarrier: label,
-    options: me.options,
-    source: "melhor_envio",
-  };
+  return quoteFromMelhorEnvio(me);
 }

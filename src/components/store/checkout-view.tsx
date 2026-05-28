@@ -31,98 +31,28 @@ type CheckoutViewProps = {
   savedDelivery?: SavedDeliveryPayload | null;
 };
 
-type ShippingOptionRow = {
-  id: number;
-  name: string;
-  company: string;
-  priceReais: number;
-  deliveryDays: number;
-};
-
 type ShippingQuoteApiOk = {
-  cepDigits: string;
-  cepFormatted: string;
   state: string;
   city: string;
   street: string;
   neighborhood: string;
   shippingInCents: number;
-  shippingReais: number;
-  shippingCarrier?: string | null;
-  shippingSource?: string;
-  shippingOptions?: ShippingOptionRow[];
+  deliveryDays?: number;
+  quoteSource?: "melhor_envio" | "fallback";
   error?: string;
 };
 
-function isShippingOptionRow(value: unknown): value is ShippingOptionRow {
-  if (!value || typeof value !== "object") return false;
-  const o = value as Record<string, unknown>;
-  return (
-    typeof o.id === "number" &&
-    typeof o.name === "string" &&
-    typeof o.company === "string" &&
-    typeof o.priceReais === "number" &&
-    typeof o.deliveryDays === "number"
-  );
-}
-
-function pickCheapestAndFastestShippingOptions(
-  options: ShippingOptionRow[],
-): ShippingOptionRow[] {
-  if (options.length <= 1) return options;
-
-  const byPrice = [...options].sort((a, b) => {
-    if (a.priceReais !== b.priceReais) return a.priceReais - b.priceReais;
-    if (a.deliveryDays !== b.deliveryDays) return a.deliveryDays - b.deliveryDays;
-    return a.id - b.id;
-  });
-  const cheapest = byPrice[0];
-  if (!cheapest) return [];
-
-  const byFastest = [...options].sort((a, b) => {
-    if (a.deliveryDays !== b.deliveryDays) return a.deliveryDays - b.deliveryDays;
-    if (a.priceReais !== b.priceReais) return a.priceReais - b.priceReais;
-    return a.id - b.id;
-  });
-  const fastest = byFastest[0];
-  if (!fastest || fastest.id === cheapest.id) {
-    return [cheapest];
-  }
-
-  return [cheapest, fastest];
-}
-
-/** Aplica retorno de /api/shipping/quote ao estado de frete (opcao mais barata quando ha lista ME). */
 function freightStateFromQuoteApi(data: ShippingQuoteApiOk): {
-  options: ShippingOptionRow[];
-  melhorEnvioServiceId: number | null;
   shippingInCents: number;
-  carrierLabel: string | null;
+  deliveryDays: number | null;
 } {
-  const rawOpts = data.shippingOptions;
-  const options = Array.isArray(rawOpts)
-    ? rawOpts.filter(isShippingOptionRow).sort((a, b) => a.priceReais - b.priceReais)
-    : [];
-  const topOptions = pickCheapestAndFastestShippingOptions(options);
-
-  if (data.shippingSource === "melhor_envio" && topOptions.length > 0) {
-    const first = topOptions[0];
-    return {
-      options: topOptions,
-      melhorEnvioServiceId: first.id,
-      shippingInCents: Math.round(first.priceReais * 100),
-      carrierLabel: `${first.company} — ${first.name}`,
-    };
-  }
-
+  const deliveryDays =
+    typeof data.deliveryDays === "number" && data.deliveryDays > 0
+      ? data.deliveryDays
+      : null;
   return {
-    options: [],
-    melhorEnvioServiceId: null,
     shippingInCents: data.shippingInCents,
-    carrierLabel:
-      typeof data.shippingCarrier === "string" && data.shippingCarrier.trim()
-        ? data.shippingCarrier.trim()
-        : null,
+    deliveryDays,
   };
 }
 
@@ -222,9 +152,7 @@ export function CheckoutView({
   });
 
   const [shippingQuoteCents, setShippingQuoteCents] = useState<number | null>(null);
-  const [shippingCarrierLabel, setShippingCarrierLabel] = useState<string | null>(null);
-  const [freightOptions, setFreightOptions] = useState<ShippingOptionRow[]>([]);
-  const [melhorEnvioServiceId, setMelhorEnvioServiceId] = useState<number | null>(null);
+  const [shippingDeliveryDays, setShippingDeliveryDays] = useState<number | null>(null);
   const [cepStatus, setCepStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [cepMessage, setCepMessage] = useState<string | null>(null);
 
@@ -258,9 +186,7 @@ export function CheckoutView({
   useEffect(() => {
     if (fulfillmentMode === "PICKUP") {
       setShippingQuoteCents(0);
-      setShippingCarrierLabel(null);
-      setFreightOptions([]);
-      setMelhorEnvioServiceId(null);
+      setShippingDeliveryDays(null);
       setCepStatus("idle");
       setCepMessage(null);
       return;
@@ -268,9 +194,7 @@ export function CheckoutView({
 
     if (cepDigits.length !== 8) {
       setShippingQuoteCents(null);
-      setShippingCarrierLabel(null);
-      setFreightOptions([]);
-      setMelhorEnvioServiceId(null);
+      setShippingDeliveryDays(null);
       setCepStatus("idle");
       setCepMessage(null);
       return;
@@ -296,9 +220,7 @@ export function CheckoutView({
           setCepStatus("error");
           setCepMessage(data.error || "CEP nao encontrado.");
           setShippingQuoteCents(null);
-          setShippingCarrierLabel(null);
-          setFreightOptions([]);
-          setMelhorEnvioServiceId(null);
+          setShippingDeliveryDays(null);
           return;
         }
 
@@ -311,10 +233,8 @@ export function CheckoutView({
           neighborhood: data.neighborhood || prev.neighborhood,
         }));
         const fr = freightStateFromQuoteApi(data);
-        setFreightOptions(fr.options);
-        setMelhorEnvioServiceId(fr.melhorEnvioServiceId);
         setShippingQuoteCents(fr.shippingInCents);
-        setShippingCarrierLabel(fr.carrierLabel);
+        setShippingDeliveryDays(fr.deliveryDays);
         setCepStatus("ok");
         setCepMessage(null);
       } catch (e) {
@@ -322,9 +242,7 @@ export function CheckoutView({
         setCepStatus("error");
         setCepMessage("Falha ao consultar CEP. Tente novamente.");
         setShippingQuoteCents(null);
-        setShippingCarrierLabel(null);
-        setFreightOptions([]);
-        setMelhorEnvioServiceId(null);
+        setShippingDeliveryDays(null);
       }
     }, 500);
 
@@ -411,9 +329,7 @@ export function CheckoutView({
         setCepStatus("error");
         setCepMessage(data.error || "CEP invalido.");
         setShippingQuoteCents(null);
-        setShippingCarrierLabel(null);
-        setFreightOptions([]);
-        setMelhorEnvioServiceId(null);
+        setShippingDeliveryDays(null);
         return;
       }
       setFormState((prev) => ({
@@ -425,20 +341,36 @@ export function CheckoutView({
         neighborhood: data.neighborhood || prev.neighborhood,
       }));
       const fr = freightStateFromQuoteApi(data);
-      setFreightOptions(fr.options);
-      setMelhorEnvioServiceId(fr.melhorEnvioServiceId);
       setShippingQuoteCents(fr.shippingInCents);
-      setShippingCarrierLabel(fr.carrierLabel);
+      setShippingDeliveryDays(fr.deliveryDays);
       setCepStatus("ok");
       setCepMessage(null);
     } catch {
       setCepStatus("error");
       setCepMessage("Erro de rede.");
       setShippingQuoteCents(null);
-      setShippingCarrierLabel(null);
-      setFreightOptions([]);
-      setMelhorEnvioServiceId(null);
+      setShippingDeliveryDays(null);
     }
+  }
+
+  function renderFreightEstimate() {
+    if (cepStatus !== "ok" || shippingQuoteCents == null) {
+      return null;
+    }
+    return (
+      <div className="mt-2 rounded-2xl border border-[var(--color-line)] bg-[var(--color-soft)] px-3 py-3 sm:col-span-2">
+        <p className="text-sm font-semibold text-[var(--color-ink)]">Frete estimado</p>
+        <p className="mt-1 text-sm text-[var(--color-ink)]">
+          {formatCurrency(shippingQuoteCents / 100)}
+          {shippingDeliveryDays != null
+            ? ` · até ${shippingDeliveryDays} dia(s) útil(is)`
+            : ""}
+        </p>
+        <p className="mt-1 text-xs text-[var(--color-muted)]">
+          Valor calculado para o CEP informado. A forma de envio é definida pela loja após a compra.
+        </p>
+      </div>
+    );
   }
 
   const canSubmit =
@@ -608,9 +540,6 @@ export function CheckoutView({
             paymentMethod,
             fulfillmentType: "SHIP",
             couponCode: coupon?.code || null,
-            ...(melhorEnvioServiceId != null && freightOptions.length > 0
-              ? { melhorEnvioServiceId }
-              : {}),
             shipping: {
               ...formState,
               cep: cepDigits,
@@ -828,9 +757,7 @@ export function CheckoutView({
                       onChange={() => {
                         setFulfillmentMode("SHIP");
                         setShippingQuoteCents(null);
-                        setShippingCarrierLabel(null);
-                        setFreightOptions([]);
-                        setMelhorEnvioServiceId(null);
+                        setShippingDeliveryDays(null);
                         setCepStatus("idle");
                         setCepMessage(null);
                       }}
@@ -943,9 +870,7 @@ export function CheckoutView({
                                 neighborhood: "",
                               }));
                               setShippingQuoteCents(null);
-                              setShippingCarrierLabel(null);
-                              setFreightOptions([]);
-                              setMelhorEnvioServiceId(null);
+                              setShippingDeliveryDays(null);
                               setCepStatus("idle");
                               setCepMessage(null);
                             }}
@@ -995,50 +920,7 @@ export function CheckoutView({
                         {cepMessage ?? "Consultando frete..."}
                       </p>
                     ) : null}
-                    {freightOptions.length > 0 ? (
-                      <div className="block sm:col-span-2">
-                        <span className={labelClass}>Forma de entrega</span>
-                        <ul className="mt-2 space-y-2">
-                          {freightOptions.map((opt) => {
-                            const selected = melhorEnvioServiceId === opt.id;
-                            return (
-                              <li key={opt.id}>
-                                <label
-                                  className={`flex cursor-pointer items-start gap-2 rounded-2xl border px-2.5 py-2 text-xs sm:gap-3 sm:px-3 sm:py-3 sm:text-sm lg:py-3 ${
-                                    selected
-                                      ? "border-[var(--color-primary)] bg-[var(--color-soft)]"
-                                      : "border-[var(--color-line)] bg-white"
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="melhor-envio-service"
-                                    className="mt-1"
-                                    checked={selected}
-                                    onChange={() => {
-                                      setMelhorEnvioServiceId(opt.id);
-                                      setShippingQuoteCents(Math.round(opt.priceReais * 100));
-                                      setShippingCarrierLabel(`${opt.company} — ${opt.name}`);
-                                    }}
-                                  />
-                                  <span className="text-[var(--color-ink)]">
-                                    <span className="font-semibold">
-                                      {opt.company} — {opt.name}
-                                    </span>
-                                    <span className="mt-0.5 block text-[11px] leading-tight text-[var(--color-muted)] sm:text-sm sm:leading-normal">
-                                      {formatCurrency(opt.priceReais)}
-                                      {opt.deliveryDays > 0
-                                        ? ` · ${opt.deliveryDays} dia(s) util(is)`
-                                        : ""}
-                                    </span>
-                                  </span>
-                                </label>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ) : null}
+                    {renderFreightEstimate()}
                   </>
                 ) : (
                   <>
@@ -1084,50 +966,7 @@ export function CheckoutView({
                       ) : null}
                     </div>
 
-                    {freightOptions.length > 0 ? (
-                      <div className="block sm:col-span-2">
-                        <span className={labelClass}>Forma de entrega</span>
-                        <ul className="mt-2 space-y-2">
-                          {freightOptions.map((opt) => {
-                            const selected = melhorEnvioServiceId === opt.id;
-                            return (
-                              <li key={opt.id}>
-                                <label
-                                  className={`flex cursor-pointer items-start gap-2 rounded-2xl border px-2.5 py-2 text-xs sm:gap-3 sm:px-3 sm:py-3 sm:text-sm lg:py-3 ${
-                                    selected
-                                      ? "border-[var(--color-primary)] bg-[var(--color-soft)]"
-                                      : "border-[var(--color-line)] bg-white"
-                                  }`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="melhor-envio-service"
-                                    className="mt-1"
-                                    checked={selected}
-                                    onChange={() => {
-                                      setMelhorEnvioServiceId(opt.id);
-                                      setShippingQuoteCents(Math.round(opt.priceReais * 100));
-                                      setShippingCarrierLabel(`${opt.company} — ${opt.name}`);
-                                    }}
-                                  />
-                                  <span className="text-[var(--color-ink)]">
-                                    <span className="font-semibold">
-                                      {opt.company} — {opt.name}
-                                    </span>
-                                    <span className="mt-0.5 block text-[11px] leading-tight text-[var(--color-muted)] sm:text-sm sm:leading-normal">
-                                      {formatCurrency(opt.priceReais)}
-                                      {opt.deliveryDays > 0
-                                        ? ` · ${opt.deliveryDays} dia(s) util(is)`
-                                        : ""}
-                                    </span>
-                                  </span>
-                                </label>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ) : null}
+                    {renderFreightEstimate()}
 
                     <label className="block">
                       <span className={labelClass}>
@@ -1326,8 +1165,10 @@ export function CheckoutView({
               {pricing.shipping != null ? formatCurrency(pricing.shipping) : "—"}
             </span>
           </div>
-          {shippingCarrierLabel ? (
-            <p className="text-xs text-[var(--color-muted)]">{shippingCarrierLabel}</p>
+          {shippingDeliveryDays != null ? (
+            <p className="text-xs text-[var(--color-muted)]">
+              Prazo estimado: até {shippingDeliveryDays} dia(s) útil(is)
+            </p>
           ) : null}
             </>
           ) : (

@@ -6,6 +6,7 @@ import {
 import type { Product as ProductType } from "@/lib/types";
 import type { Prisma, Product as PrismaProduct } from "@prisma/client";
 import { getPrismaOrNull } from "@/lib/prisma";
+import { orderUpdateShippingDispatchExtras } from "@/lib/prisma-shipping-fields";
 import { getEmailKindForOrderStatus, orderToEmailOrder, sendOrderEmail } from "@/lib/email";
 import { resolveFlashSaleEndsAt } from "@/lib/flash-sale";
 import {
@@ -164,6 +165,8 @@ export type AdminProductCreateInput = {
   flashSaleActive?: boolean;
   /** 1–99 exibido na vitrine durante a oferta; ignorado se sem oferta relâmpago. */
   flashSaleDiscountPercent?: number | null;
+  /** Forca nova janela de 24h mesmo com oferta ainda valida. */
+  flashSaleRenew?: boolean;
   packageWidthCm?: number | null;
   packageHeightCm?: number | null;
   packageLengthCm?: number | null;
@@ -309,7 +312,7 @@ export async function updateAdminProduct(
 
   const packagePatch = normalizePackageDbPatch(input);
 
-  if (input.flashSaleActive !== undefined) {
+  if (input.flashSaleActive !== undefined || input.flashSaleRenew) {
     const existing = await prisma.product.findUnique({
       where: { id: productId },
       select: { flashSaleEndsAt: true },
@@ -317,11 +320,22 @@ export async function updateAdminProduct(
     if (!existing) {
       throw new Error("Produto nao encontrado.");
     }
+    const wantsActive =
+      input.flashSaleActive === false && input.flashSaleRenew !== true
+        ? false
+        : input.flashSaleRenew === true
+          ? true
+          : input.flashSaleActive !== undefined
+            ? input.flashSaleActive
+            : existing.flashSaleEndsAt != null &&
+              existing.flashSaleEndsAt.getTime() > Date.now();
     updateData.flashSaleEndsAt = resolveFlashSaleEndsAt(
       existing.flashSaleEndsAt,
-      input.flashSaleActive,
+      wantsActive,
+      Date.now(),
+      input.flashSaleRenew === true,
     );
-    if (!input.flashSaleActive) {
+    if (input.flashSaleActive === false && !input.flashSaleRenew) {
       updateData.flashSaleDiscountPercent = null;
     }
   }
@@ -395,6 +409,8 @@ export type AdminOrder = {
   pickupCode?: string | null;
   shippingCode?: string;
   shippingCarrier?: string;
+  shippingDispatchMode: string;
+  shippingQuotedDeliveryDays?: number | null;
   melhorEnvioServiceId?: string | null;
   melhorEnvioShipmentId?: string | null;
   melhorEnvioStatus?: string | null;
@@ -433,6 +449,11 @@ export async function listAdminOrders(): Promise<AdminOrder[]> {
     pickupCode: order.pickupCode,
     shippingCode: order.shippingCode ?? undefined,
     shippingCarrier: order.shippingCarrier ?? undefined,
+    shippingDispatchMode:
+      (order as { shippingDispatchMode?: string }).shippingDispatchMode ?? "PENDING",
+    shippingQuotedDeliveryDays:
+      (order as { shippingQuotedDeliveryDays?: number | null }).shippingQuotedDeliveryDays ??
+      null,
     melhorEnvioServiceId: order.melhorEnvioServiceId,
     melhorEnvioShipmentId: order.melhorEnvioShipmentId,
     melhorEnvioStatus: order.melhorEnvioStatus,
@@ -455,6 +476,7 @@ export async function updateOrderStatus(
     status: string;
     shippingCode?: string | null;
     shippingCarrier?: string | null;
+    shippingDispatchMode?: string;
     trackingUrl?: string | null;
     invoiceUrl?: string | null;
   },
@@ -482,6 +504,19 @@ export async function updateOrderStatus(
     invoiceUrl: input.invoiceUrl || null,
   };
 
+  const dispatchExtras = orderUpdateShippingDispatchExtras({
+    shippingDispatchMode: input.shippingDispatchMode,
+  });
+  if (dispatchExtras.shippingDispatchMode) {
+    updateData.shippingDispatchMode = dispatchExtras.shippingDispatchMode;
+    if (
+      dispatchExtras.shippingDispatchMode === "OWN_DELIVERY" &&
+      !(input.shippingCarrier?.trim() || existing.shippingCarrier?.trim())
+    ) {
+      updateData.shippingCarrier = "Entrega propria";
+    }
+  }
+
   if (input.status === "PROCESSING" && !existing.processingAt) {
     updateData.processingAt = now;
   }
@@ -506,7 +541,11 @@ export async function updateOrderStatus(
           message: `Status alterado de ${existing.status} para ${input.status}.`,
           metadata: JSON.stringify({
             shippingCode: input.shippingCode || null,
-            shippingCarrier: input.shippingCarrier || null,
+            shippingCarrier:
+              ((updateData.shippingCarrier as string | null) ??
+                input.shippingCarrier) ||
+              null,
+            shippingDispatchMode: input.shippingDispatchMode || null,
             trackingUrl: input.trackingUrl || null,
             invoiceUrl: input.invoiceUrl || null,
           }),

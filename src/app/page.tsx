@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DesktopFlashSaleSection } from "@/components/home/desktop-flash-sale-section";
 import { MobileHomeShelf } from "@/components/home/mobile-home-shelf";
 import {
   BudgetFinderSection,
@@ -14,7 +15,11 @@ import {
   TestimonialSection,
   TopRankedShelf,
 } from "@/components/home/home-sections";
-import { getProducts, getProductsByTag } from "@/lib/catalog-server";
+import {
+  getActiveFlashSaleProducts,
+  getProducts,
+  getProductsByTag,
+} from "@/lib/catalog-server";
 
 export const metadata: Metadata = {
   title: "Stock Center Variedades",
@@ -23,12 +28,14 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
-  const [allProducts, featuredProducts, bestSellers, promoProducts] = await Promise.all([
-    getProducts(240),
-    getProductsByTag("featured", 48),
-    getProductsByTag("bestSeller", 48),
-    getProductsByTag("promotion", 48),
-  ]);
+  const [allProducts, featuredProducts, bestSellers, promoProducts, flashSaleProducts] =
+    await Promise.all([
+      getProducts(240),
+      getProductsByTag("featured", 48),
+      getProductsByTag("bestSeller", 48),
+      getProductsByTag("promotion", 48),
+      getActiveFlashSaleProducts(48),
+    ]);
 
   return (
     <div>
@@ -37,11 +44,13 @@ export default async function HomePage() {
         <MobileHomeShelf
           products={allProducts}
           featuredProducts={featuredProducts}
+          flashSaleProducts={flashSaleProducts}
         />
       </div>
       <div className="hidden sm:block">
         <HeroSection />
       </div>
+      <DesktopFlashSaleSection products={flashSaleProducts} />
       <CategoryShowcase />
       <FeaturedProducts
         eyebrow="Produtos em destaque"

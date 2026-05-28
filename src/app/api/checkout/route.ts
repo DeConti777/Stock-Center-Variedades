@@ -77,8 +77,7 @@ function checkoutSessionCreateParams(
                   amount: order.shippingInCents,
                   currency: "brl",
                 },
-                display_name:
-                  order.shippingCarrier?.trim() || "Entrega (cotacao integrada)",
+                display_name: "Entrega",
               },
             },
           ],

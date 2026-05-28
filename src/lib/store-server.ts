@@ -3,6 +3,7 @@ import { products as fallbackProducts } from "@/lib/site-data";
 import { onlyDigits } from "@/lib/br-fields";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { getShippingInCentsFromCep } from "@/lib/shipping";
+import { orderCreateShippingFieldExtras } from "@/lib/prisma-shipping-fields";
 import { quoteCartShipping } from "@/lib/shipping-quote";
 import { applyFlashSalePricing } from "@/lib/flash-sale";
 import { fetchFlashSaleDiscountMap } from "@/lib/prisma-product-map";
@@ -31,7 +32,7 @@ export type CheckoutInput = {
   couponCode?: string | null;
   /** SHIP: entrega. PICKUP: retirada na loja sem frete. */
   fulfillmentType?: FulfillmentType;
-  /** ID do servico Melhor Envio retornado em shippingOptions (PAC, SEDEX, etc.). */
+  /** Ignorado no servidor; cotacao usa SHIPPING_QUOTE_STRATEGY. */
   melhorEnvioServiceId?: number | null;
   shipping: {
     recipientName: string;
@@ -353,18 +354,14 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
       ? {
           shippingInCents: 0,
           shippingServiceId: null as string | null,
-          shippingCarrier: null as string | null,
+          shippingQuotedDeliveryDays: null as number | null,
         }
       : await (async () => {
-          const q = await quoteCartShipping(
-            cepDigits,
-            normalizedItems,
-            input.melhorEnvioServiceId ?? null,
-          );
+          const q = await quoteCartShipping(cepDigits, normalizedItems);
           return {
             shippingInCents: q.shippingInCents,
             shippingServiceId: q.shippingServiceId,
-            shippingCarrier: q.shippingCarrier,
+            shippingQuotedDeliveryDays: q.deliveryDays,
           };
         })();
 
@@ -524,7 +521,10 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
         customerCpf: input.shipping.cpf,
         fulfillmentType: fulfillment,
         melhorEnvioServiceId: shippingQuote.shippingServiceId,
-        shippingCarrier: shippingQuote.shippingCarrier,
+        shippingCarrier: null,
+        ...orderCreateShippingFieldExtras({
+          shippingQuotedDeliveryDays: shippingQuote.shippingQuotedDeliveryDays,
+        }),
         shippingAddress: shippingAddressJson,
         items: {
           create: orderItems.map((item) => ({
@@ -547,6 +547,8 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
               paymentMethod: input.paymentMethod,
               couponCode,
               fulfillmentType: fulfillment,
+              melhorEnvioServiceId: shippingQuote.shippingServiceId,
+              shippingQuotedDeliveryDays: shippingQuote.shippingQuotedDeliveryDays,
             }),
           },
         },

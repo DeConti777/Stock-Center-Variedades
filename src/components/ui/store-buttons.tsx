@@ -6,21 +6,32 @@ import { useStore } from "@/components/store/store-provider";
 import { isLikelyMobileViewport, trackEcommerceEvent } from "@/lib/analytics";
 
 function HeartIcon({ filled }: { filled: boolean }) {
+  if (filled) {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" className="text-red-600" aria-hidden>
+        <path
+          fill="currentColor"
+          d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a2.25 2.25 0 01-2.364 0l-.003-.001z"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg
       width="22"
       height="22"
       viewBox="0 0 24 24"
-      className={filled ? "text-red-600" : "text-[var(--color-muted)]"}
+      fill="none"
+      className="text-[var(--color-muted)]"
       aria-hidden
     >
       <path
-        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5A5.5 5.5 0 0 0 19 14z"
-        fill={filled ? "currentColor" : "none"}
         stroke="currentColor"
-        strokeWidth={filled ? 0 : 2}
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
       />
     </svg>
   );

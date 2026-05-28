@@ -7,13 +7,9 @@ import {
   AddToCartSecondaryButton,
   FavoriteButton,
 } from "@/components/ui/store-buttons";
-import { ProductCard } from "@/components/ui/product-card";
+import { ProductRelatedShelf } from "@/components/product/product-related-shelf";
 import { useStore } from "@/components/store/store-provider";
-import {
-  calculatePixPrice,
-  formatCurrency,
-  prioritizeVisitedProducts,
-} from "@/lib/catalog";
+import { calculatePixPrice, formatCurrency } from "@/lib/catalog";
 import { getFlashSaleDisplayPercent, isFlashSaleActive } from "@/lib/flash-sale";
 import { formatCepDisplay, onlyDigits } from "@/lib/br-fields";
 import {
@@ -101,14 +97,12 @@ function initialImageIndex(product: Product, displayImages: string[]) {
 
 export function ProductDetailView({
   product,
-  relatedProducts,
   customerReviews,
 }: {
   product: Product;
-  relatedProducts: Product[];
   customerReviews: ProductReview[];
 }) {
-  const { markProductVisited, visitedProductIds } = useStore();
+  const { markProductVisited } = useStore();
   const displayImages = useMemo(
     () => buildProductDisplayImages(product),
     [product],
@@ -141,11 +135,6 @@ export function ProductDetailView({
     });
   }, [product.category, product.id, product.price]);
 
-  const relatedProductsOrdered = useMemo(
-    () => prioritizeVisitedProducts(relatedProducts, visitedProductIds),
-    [relatedProducts, visitedProductIds],
-  );
-
   const safeIndex =
     displayImages.length === 0
       ? 0
@@ -165,7 +154,7 @@ export function ProductDetailView({
   const [freightBusy, setFreightBusy] = useState(false);
   const [freightError, setFreightError] = useState<string | null>(null);
   const [freightPrice, setFreightPrice] = useState<number | null>(null);
-  const [freightCarrier, setFreightCarrier] = useState<string | null>(null);
+  const [freightDeliveryDays, setFreightDeliveryDays] = useState<number | null>(null);
   const [reviewLightbox, setReviewLightbox] = useState<null | { src: string; alt: string }>(null);
   const [flashSaleRemainMs, setFlashSaleRemainMs] = useState(0);
 
@@ -193,12 +182,26 @@ export function ProductDetailView({
   }
 
   const carouselTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const carouselGestureAxisRef = useRef<"horizontal" | "vertical" | null>(null);
 
   function handleCarouselTouchStart(e: TouchEvent<HTMLDivElement>) {
     if (!canNavigate) return;
     const t = e.touches[0];
     if (!t) return;
     carouselTouchRef.current = { x: t.clientX, y: t.clientY };
+    carouselGestureAxisRef.current = null;
+  }
+
+  function handleCarouselTouchMove(e: TouchEvent<HTMLDivElement>) {
+    const start = carouselTouchRef.current;
+    const t = e.touches[0];
+    if (!start || !t || carouselGestureAxisRef.current) return;
+    const dx = Math.abs(t.clientX - start.x);
+    const dy = Math.abs(t.clientY - start.y);
+    const threshold = 10;
+    if (dx > threshold || dy > threshold) {
+      carouselGestureAxisRef.current = dx > dy ? "horizontal" : "vertical";
+    }
   }
 
   function handleCarouselTouchEnd(e: TouchEvent<HTMLDivElement>) {
@@ -206,10 +209,14 @@ export function ProductDetailView({
     const t = e.changedTouches[0];
     if (!t) {
       carouselTouchRef.current = null;
+      carouselGestureAxisRef.current = null;
       return;
     }
     const start = carouselTouchRef.current;
+    const axis = carouselGestureAxisRef.current;
     carouselTouchRef.current = null;
+    carouselGestureAxisRef.current = null;
+    if (axis === "vertical") return;
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
     if (Math.abs(dy) > Math.abs(dx)) return;
@@ -219,7 +226,7 @@ export function ProductDetailView({
   }
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-10 sm:space-y-16">
       {reviewLightbox ? (
         <ReviewImageLightbox
           src={reviewLightbox.src}
@@ -227,11 +234,11 @@ export function ProductDetailView({
           onClose={() => setReviewLightbox(null)}
         />
       ) : null}
-      <section className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-4 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-4">
           <div
-            className={`relative flex aspect-square touch-pan-x items-end overflow-hidden rounded-[2.5rem] p-0 shadow-[0_30px_90px_rgba(15,23,42,0.1)] sm:p-6 ${
-              isProductMediaUrl(selectedImage) ? "bg-[var(--color-surface)]" : ""
+            className={`relative mx-auto flex aspect-square w-full touch-pan-y items-stretch overflow-hidden rounded-[1.5rem] p-0 shadow-[0_30px_90px_rgba(15,23,42,0.1)] sm:mx-0 sm:max-h-none sm:rounded-[2.5rem] sm:p-6 ${
+              isProductMediaUrl(selectedImage) ? "bg-[var(--color-soft)]" : ""
             }`}
             style={
               isProductMediaUrl(selectedImage)
@@ -241,20 +248,25 @@ export function ProductDetailView({
                   }
             }
             onTouchStart={handleCarouselTouchStart}
+            onTouchMove={handleCarouselTouchMove}
             onTouchEnd={handleCarouselTouchEnd}
+            onTouchCancel={handleCarouselTouchEnd}
           >
             {isProductMediaUrl(selectedImage) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={selectedImage}
                 alt=""
-                className="absolute inset-0 h-full w-full object-contain sm:inset-6 sm:h-[calc(100%-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[2rem]"
+                className="absolute inset-0 h-full w-full object-cover sm:inset-6 sm:h-[calc(100%-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[2rem] sm:object-contain"
               />
             ) : (
               <div className="w-full rounded-[2rem] border border-white/40 bg-white/15 p-6 backdrop-blur-md">
                 <div className="h-72 rounded-[1.5rem] border border-white/50 bg-white/30" />
               </div>
             )}
+            <div className="absolute right-3 top-3 z-[3] sm:right-6 sm:top-6">
+              <FavoriteButton productId={product.id} />
+            </div>
             {canNavigate ? (
               <>
                 <button
@@ -328,8 +340,8 @@ export function ProductDetailView({
         </div>
 
         <div className="rounded-[2.5rem] border border-[var(--color-line)] bg-white p-6 shadow-[0_25px_70px_rgba(15,23,42,0.08)] sm:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="hidden items-start justify-between gap-4 sm:flex">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--color-primary)]">
                 {product.category}
               </p>
@@ -337,10 +349,9 @@ export function ProductDetailView({
                 {product.name}
               </h1>
             </div>
-            <FavoriteButton productId={product.id} />
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[var(--color-muted)]">
+          <div className="mt-5 hidden flex-wrap items-center gap-3 text-sm text-[var(--color-muted)] sm:flex">
             <span>{product.rating.toFixed(1)} de 5</span>
             <span className="h-1 w-1 rounded-full bg-[var(--color-muted)]" />
             <span>{product.reviews} avaliacoes</span>
@@ -348,7 +359,7 @@ export function ProductDetailView({
             <span>SKU {product.sku}</span>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-0 sm:mt-3">
             {inFlashSale ? (
               <div className="-mx-4 w-[calc(100%+2rem)] overflow-hidden rounded-[0.35rem] border-2 border-[#d49f00] bg-[#ffd61f]">
                 <div className="flex min-h-[1.95rem] items-center justify-between gap-2 px-2.5 py-1">
@@ -445,11 +456,11 @@ export function ProductDetailView({
           </div>
 
           <div className="mt-8 rounded-[2rem] border border-[var(--color-line)] p-5">
-            <div className="flex flex-wrap gap-2 border-b border-[var(--color-line)] pb-4">
+            <div className="grid grid-cols-2 gap-2 border-b border-[var(--color-line)] pb-3">
               <button
                 type="button"
                 onClick={() => setFreightTab("info")}
-                className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide ${
+                className={`min-w-0 rounded-full px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide sm:text-xs ${
                   freightTab === "info"
                     ? "bg-[var(--color-primary)] text-white"
                     : "bg-[var(--color-soft)] text-[var(--color-ink)]"
@@ -460,7 +471,7 @@ export function ProductDetailView({
               <button
                 type="button"
                 onClick={() => setFreightTab("frete")}
-                className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide ${
+                className={`min-w-0 rounded-full px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide sm:text-xs ${
                   freightTab === "frete"
                     ? "bg-[var(--color-primary)] text-white"
                     : "bg-[var(--color-soft)] text-[var(--color-ink)]"
@@ -471,7 +482,7 @@ export function ProductDetailView({
             </div>
 
             {freightTab === "info" ? (
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-[var(--color-muted)]">
                     Estoque
@@ -494,7 +505,7 @@ export function ProductDetailView({
                 </div>
               </div>
             ) : (
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-4">
                 <p className="text-sm text-[var(--color-muted)]">
                   Simule o frete para 1 unidade (medidas da embalagem cadastradas no admin, ou padrao
                   da loja).
@@ -522,7 +533,7 @@ export function ProductDetailView({
                       setFreightBusy(true);
                       setFreightError(null);
                       setFreightPrice(null);
-                      setFreightCarrier(null);
+                      setFreightDeliveryDays(null);
                       void (async () => {
                         try {
                           const res = await fetch("/api/shipping/quote", {
@@ -535,8 +546,8 @@ export function ProductDetailView({
                           });
                           const data = (await res.json()) as {
                             shippingReais?: number;
-                            shippingCarrier?: string | null;
-                            shippingSource?: string;
+                            deliveryDays?: number;
+                            quoteSource?: string;
                             error?: string;
                           };
                           if (!res.ok) {
@@ -548,9 +559,9 @@ export function ProductDetailView({
                             return;
                           }
                           setFreightPrice(data.shippingReais);
-                          setFreightCarrier(
-                            typeof data.shippingCarrier === "string"
-                              ? data.shippingCarrier.trim() || null
+                          setFreightDeliveryDays(
+                            typeof data.deliveryDays === "number" && data.deliveryDays > 0
+                              ? data.deliveryDays
                               : null,
                           );
                         } catch {
@@ -571,10 +582,12 @@ export function ProductDetailView({
                 {freightPrice != null ? (
                   <div className="rounded-2xl bg-[var(--color-soft)] p-4">
                     <p className="text-sm font-semibold text-[var(--color-ink)]">
-                      A partir de {formatCurrency(freightPrice)} para este CEP (1 un.).
+                      Frete estimado: {formatCurrency(freightPrice)} (1 un.)
                     </p>
-                    {freightCarrier ? (
-                      <p className="mt-1 text-xs text-[var(--color-muted)]">{freightCarrier}</p>
+                    {freightDeliveryDays != null ? (
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">
+                        Prazo estimado: até {freightDeliveryDays} dia(s) útil(is)
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
@@ -652,21 +665,7 @@ export function ProductDetailView({
         </div>
       </section>
 
-      <section>
-        <div className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--color-primary)]">
-            Produtos relacionados
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-bold text-[var(--color-ink)]">
-            Continue navegando por itens com alto potencial de compra.
-          </h2>
-        </div>
-        <div className="product-grid-mobile grid gap-2 md:grid-cols-2 md:gap-5 xl:grid-cols-4">
-          {relatedProductsOrdered.map((relatedProduct) => (
-            <ProductCard key={relatedProduct.id} product={relatedProduct} />
-          ))}
-        </div>
-      </section>
+      <ProductRelatedShelf productId={product.id} />
     </div>
   );
 }

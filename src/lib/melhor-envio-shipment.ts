@@ -4,6 +4,7 @@ import {
   isMelhorEnvioConfigured,
   melhorEnvioBaseUrl,
 } from "@/lib/melhor-envio";
+import { isMelhorEnvioDispatchAllowed } from "@/lib/shipping-dispatch";
 import {
   aggregatePackageVolume,
   resolvePackageDims,
@@ -368,6 +369,18 @@ export async function syncMelhorEnvioForPaidOrder(
 ): Promise<MelhorEnvioSyncResult> {
   if (orderInput.fulfillmentType !== "SHIP") {
     return { ok: false, skipped: true, reason: "Pedido e retirada na loja." };
+  }
+
+  const dispatchMode = orderInput.shippingDispatchMode ?? "PENDING";
+  if (!isMelhorEnvioDispatchAllowed(dispatchMode)) {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        dispatchMode === "OWN_DELIVERY"
+          ? "Pedido marcado para entrega propria (van). Altere o modo de despacho no admin para usar Melhor Envio."
+          : "Defina o modo de despacho como Melhor Envio no painel admin antes de sincronizar.",
+    };
   }
 
   if (!isMelhorEnvioConfigured()) {

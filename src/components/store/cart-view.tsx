@@ -9,6 +9,29 @@ import type { Product } from "@/lib/types";
 import { useStore } from "@/components/store/store-provider";
 import { isLikelyMobileViewport, trackEcommerceEvent } from "@/lib/analytics";
 
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
 export function CartView({
   recommendedProducts,
 }: {
@@ -110,9 +133,10 @@ export function CartView({
                     <button
                       type="button"
                       onClick={() => removeFromCart(item.id)}
-                      className="inline-flex shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-primary)] sm:px-4 sm:py-2 sm:text-sm"
+                      aria-label={`Remover ${item.name} do carrinho`}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/10 sm:h-10 sm:w-10"
                     >
-                      Remover
+                      <TrashIcon className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                     </button>
                   </div>
                   <p className="hidden text-sm leading-6 text-[var(--color-muted)] sm:block">

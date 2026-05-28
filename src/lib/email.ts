@@ -234,7 +234,7 @@ function renderOrderEmail(kind: OrderEmailKind, order: EmailOrder) {
         <div style="margin-top:22px;padding:18px;border-radius:18px;background:#f8fafc;border:1px solid #e5e7eb;">
           <div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#6b7280;font-weight:700;">Rastreamento</div>
           <p style="margin:10px 0 0;color:#111827;">
-            ${order.shippingCarrier ? `Transportadora: <strong>${escapeHtml(order.shippingCarrier)}</strong><br />` : ""}
+            Entrega<br />
             ${order.shippingCode ? `Codigo: <strong>${escapeHtml(order.shippingCode)}</strong><br />` : ""}
             ${
               order.trackingUrl

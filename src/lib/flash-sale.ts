@@ -6,10 +6,31 @@ export function resolveFlashSaleEndsAt(
   existing: Date | null | undefined,
   flashSaleActive: boolean,
   now = Date.now(),
+  renew = false,
 ): Date | null {
   if (!flashSaleActive) return null;
-  if (existing && existing.getTime() > now) return existing;
+  if (!renew && existing && existing.getTime() > now) return existing;
   return new Date(now + FLASH_SALE_DURATION_MS);
+}
+
+export type FlashSaleAdminStatus =
+  | "inactive"
+  | "active"
+  | "expired"
+  | "no_stock";
+
+/** Status para badges no admin (independente de published). */
+export function getFlashSaleAdminStatus(
+  product: Product,
+  now = Date.now(),
+): FlashSaleAdminStatus {
+  const end = product.flashSaleEndsAt;
+  if (end == null || end === "") return "inactive";
+  const endMs = new Date(end).getTime();
+  if (Number.isNaN(endMs)) return "inactive";
+  if (endMs <= now) return "expired";
+  if (product.stock <= 0) return "no_stock";
+  return "active";
 }
 
 export function isFlashSaleActive(product: Product, now = Date.now()): boolean {

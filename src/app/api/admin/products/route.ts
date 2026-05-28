@@ -36,6 +36,7 @@ const createProductSchema = z.object({
   flashSaleDiscountPercent: z
     .union([z.number().int().min(1).max(99), z.null()])
     .optional(),
+  flashSaleRenew: z.boolean().optional(),
   ...adminPackageFieldsSchema,
 });
 
@@ -66,6 +67,7 @@ const updateProductSchema = z.object({
   flashSaleDiscountPercent: z
     .union([z.number().int().min(1).max(99), z.null()])
     .optional(),
+  flashSaleRenew: z.boolean().optional(),
   ...adminPackageFieldsSchema,
 });
 

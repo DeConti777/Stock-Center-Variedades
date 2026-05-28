@@ -43,6 +43,7 @@ Sem `MELHOR_ENVIO_TOKEN` + `SHIPPING_ORIGIN_POSTAL_CODE` válidos, o site usa **
 - [ ] `SHIPPING_ORIGIN_POSTAL_CODE` (8 dígitos, CEP de postagem)
 - [ ] `MELHOR_ENVIO_CONTACT_EMAIL` (User-Agent da API)
 - [ ] `SHIPPING_DEFAULT_*` — dimensões/peso/seguro padrão na cotação (ver `.env.example`)
+- [ ] `SHIPPING_QUOTE_STRATEGY` (opcional) — `cheapest` (padrão) ou `service_id:<n>` para forçar um serviço ME na cotação opaca do checkout
 
 ### Cron (expiração de pedidos Pix reservados)
 

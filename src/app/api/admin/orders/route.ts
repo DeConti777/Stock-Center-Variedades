@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { listAdminOrders, updateOrderStatus } from "@/lib/admin-server";
+import { SHIPPING_DISPATCH_MODES } from "@/lib/shipping-dispatch";
 
 const updateOrderSchema = z.object({
   id: z.string().min(1),
   status: z.string().min(2),
   shippingCode: z.string().optional().nullable(),
   shippingCarrier: z.string().optional().nullable(),
+  shippingDispatchMode: z.enum(SHIPPING_DISPATCH_MODES).optional(),
   trackingUrl: z.string().url().optional().nullable().or(z.literal("")),
   invoiceUrl: z.string().url().optional().nullable().or(z.literal("")),
 });

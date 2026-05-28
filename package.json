@@ -12,6 +12,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
+    "db:sync-shipping": "prisma migrate deploy && prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx scripts/seed-demo-products.ts --apply",
     "seed:demo:delete": "tsx scripts/delete-demo-products.ts --apply",

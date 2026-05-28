@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { FlashSalePageView } from "@/components/home/flash-sale-page-view";
-import { getProducts } from "@/lib/catalog-server";
+import { getActiveFlashSaleProducts } from "@/lib/catalog-server";
 
 export const metadata: Metadata = {
   title: "Ofertas Relampago | Stock Center",
@@ -9,6 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function OfertasRelampagoPage() {
-  const products = await getProducts();
+  const products = await getActiveFlashSaleProducts();
   return <FlashSalePageView products={products} />;
 }

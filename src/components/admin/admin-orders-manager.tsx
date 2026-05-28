@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import {
+  canAdminChooseShippingDispatch,
+  isMelhorEnvioDispatchAllowed,
+  type ShippingDispatchMode,
+} from "@/lib/shipping-dispatch";
+import {
   adminActionButtonClass,
   IconRefresh,
   IconSave,
@@ -19,6 +24,7 @@ type AdminOrder = {
   customerEmail: string;
   shippingCode?: string;
   shippingCarrier?: string;
+  shippingDispatchMode: string;
   melhorEnvioServiceId?: string | null;
   melhorEnvioShipmentId?: string | null;
   melhorEnvioStatus?: string | null;
@@ -35,10 +41,17 @@ type AdminOrder = {
 
 type OrderDraft = {
   status: string;
+  shippingDispatchMode: ShippingDispatchMode;
   shippingCode: string;
   shippingCarrier: string;
   trackingUrl: string;
   invoiceUrl: string;
+};
+
+const dispatchModeLabels: Record<ShippingDispatchMode, string> = {
+  PENDING: "Aguardando decisao",
+  MELHOR_ENVIO: "Melhor Envio",
+  OWN_DELIVERY: "Entrega propria (van)",
 };
 
 const statusOptions = [
@@ -53,8 +66,14 @@ const statusOptions = [
 ];
 
 function buildDraft(order: AdminOrder): OrderDraft {
+  const mode = order.shippingDispatchMode;
+  const shippingDispatchMode: ShippingDispatchMode =
+    mode === "MELHOR_ENVIO" || mode === "OWN_DELIVERY" || mode === "PENDING"
+      ? mode
+      : "PENDING";
   return {
     status: order.status,
+    shippingDispatchMode,
     shippingCode: order.shippingCode || "",
     shippingCarrier: order.shippingCarrier || "",
     trackingUrl: order.trackingUrl || "",
@@ -66,6 +85,7 @@ function isDraftDirty(order: AdminOrder, draft: OrderDraft) {
   const original = buildDraft(order);
   return (
     draft.status !== original.status ||
+    draft.shippingDispatchMode !== original.shippingDispatchMode ||
     draft.shippingCode !== original.shippingCode ||
     draft.shippingCarrier !== original.shippingCarrier ||
     draft.trackingUrl !== original.trackingUrl ||
@@ -341,21 +361,73 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
               </select>
               {order.fulfillmentType === "SHIP" ? (
                 <div className="mt-3 rounded-2xl border border-[var(--color-line)] bg-white/80 px-3 py-2 text-xs text-[var(--color-muted)]">
-                  <p>
-                    ME:{" "}
-                    <span className="font-semibold text-[var(--color-ink)]">
-                      {order.melhorEnvioStatus || "—"}
-                    </span>
-                  </p>
-                  {order.melhorEnvioShipmentId ? (
-                    <p className="mt-1 font-mono text-[0.65rem]">
-                      {order.melhorEnvioShipmentId.slice(0, 12)}…
+                  {canAdminChooseShippingDispatch(order.status, order.fulfillmentType) ? (
+                    <label className="block">
+                      <span className="font-semibold text-[var(--color-ink)]">
+                        Modo de despacho
+                      </span>
+                      <select
+                        value={draft.shippingDispatchMode}
+                        disabled={savingAll}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [order.id]: {
+                              ...draft,
+                              shippingDispatchMode: event.target
+                                .value as ShippingDispatchMode,
+                              ...(event.target.value === "OWN_DELIVERY" &&
+                              !draft.shippingCarrier.trim()
+                                ? { shippingCarrier: "Entrega propria" }
+                                : {}),
+                            },
+                          }))
+                        }
+                        className="mt-1 w-full rounded-2xl border border-[var(--color-line)] bg-white px-2 py-2 text-xs text-[var(--color-ink)] disabled:opacity-50"
+                      >
+                        {(Object.keys(dispatchModeLabels) as ShippingDispatchMode[]).map(
+                          (mode) => (
+                            <option key={mode} value={mode}>
+                              {dispatchModeLabels[mode]}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                  ) : (
+                    <p>
+                      Despacho:{" "}
+                      <span className="font-semibold text-[var(--color-ink)]">
+                        {dispatchModeLabels[
+                          draft.shippingDispatchMode as ShippingDispatchMode
+                        ] || draft.shippingDispatchMode}
+                      </span>
+                    </p>
+                  )}
+                  {isMelhorEnvioDispatchAllowed(draft.shippingDispatchMode) ? (
+                    <>
+                      <p className="mt-2">
+                        ME:{" "}
+                        <span className="font-semibold text-[var(--color-ink)]">
+                          {order.melhorEnvioStatus || "—"}
+                        </span>
+                      </p>
+                      {order.melhorEnvioShipmentId ? (
+                        <p className="mt-1 font-mono text-[0.65rem]">
+                          {order.melhorEnvioShipmentId.slice(0, 12)}…
+                        </p>
+                      ) : null}
+                      {order.melhorEnvioError ? (
+                        <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
+                      ) : null}
+                    </>
+                  ) : draft.shippingDispatchMode === "OWN_DELIVERY" ? (
+                    <p className="mt-2 text-[var(--color-ink)]">
+                      Entrega pela van — preencha rastreio abaixo se necessario.
                     </p>
                   ) : null}
-                  {order.melhorEnvioError ? (
-                    <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
-                  ) : null}
-                  {["PAID", "PROCESSING", "SHIPPED", "DELIVERED"].includes(order.status) &&
+                  {canAdminChooseShippingDispatch(order.status, order.fulfillmentType) &&
+                  isMelhorEnvioDispatchAllowed(draft.shippingDispatchMode) &&
                   order.melhorEnvioStatus !== "PURCHASED" ? (
                     <button
                       type="button"
@@ -480,22 +552,72 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                     <div className="grid min-w-[260px] gap-2">
                       {order.fulfillmentType === "SHIP" ? (
                         <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-muted)]">
-                          <p>
-                            Melhor Envio:{" "}
-                            <span className="font-semibold text-[var(--color-ink)]">
-                              {order.melhorEnvioStatus || "nao enviado"}
-                            </span>
-                            {order.melhorEnvioServiceId
-                              ? ` · servico ${order.melhorEnvioServiceId}`
-                              : ""}
-                          </p>
-                          {order.melhorEnvioShipmentId ? (
-                            <p className="mt-1 font-mono text-[0.65rem] text-[var(--color-ink)]">
-                              ID: {order.melhorEnvioShipmentId}
+                          {canAdminChooseShippingDispatch(
+                            order.status,
+                            order.fulfillmentType,
+                          ) ? (
+                            <label className="block">
+                              <span className="font-semibold text-[var(--color-ink)]">
+                                Modo de despacho
+                              </span>
+                              <select
+                                value={draft.shippingDispatchMode}
+                                disabled={savingAll}
+                                onChange={(event) =>
+                                  setDrafts((current) => ({
+                                    ...current,
+                                    [order.id]: {
+                                      ...draft,
+                                      shippingDispatchMode: event.target
+                                        .value as ShippingDispatchMode,
+                                      ...(event.target.value === "OWN_DELIVERY" &&
+                                      !draft.shippingCarrier.trim()
+                                        ? { shippingCarrier: "Entrega propria" }
+                                        : {}),
+                                    },
+                                  }))
+                                }
+                                className="mt-1 w-full rounded-2xl border border-[var(--color-line)] bg-white px-2 py-1.5 text-xs"
+                              >
+                                {(
+                                  Object.keys(dispatchModeLabels) as ShippingDispatchMode[]
+                                ).map((mode) => (
+                                  <option key={mode} value={mode}>
+                                    {dispatchModeLabels[mode]}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <p>
+                              Despacho:{" "}
+                              <span className="font-semibold text-[var(--color-ink)]">
+                                {dispatchModeLabels[
+                                  draft.shippingDispatchMode as ShippingDispatchMode
+                                ] || draft.shippingDispatchMode}
+                              </span>
                             </p>
-                          ) : null}
-                          {order.melhorEnvioError ? (
-                            <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
+                          )}
+                          {isMelhorEnvioDispatchAllowed(draft.shippingDispatchMode) ? (
+                            <>
+                              <p className="mt-2">
+                                Melhor Envio:{" "}
+                                <span className="font-semibold text-[var(--color-ink)]">
+                                  {order.melhorEnvioStatus || "nao enviado"}
+                                </span>
+                                {order.melhorEnvioServiceId
+                                  ? ` · servico ${order.melhorEnvioServiceId}`
+                                  : ""}
+                              </p>
+                              {order.melhorEnvioShipmentId ? (
+                                <p className="mt-1 font-mono text-[0.65rem] text-[var(--color-ink)]">
+                                  ID: {order.melhorEnvioShipmentId}
+                                </p>
+                              ) : null}
+                              {order.melhorEnvioError ? (
+                                <p className="mt-1 text-red-600">{order.melhorEnvioError}</p>
+                              ) : null}
+                            </>
                           ) : null}
                         </div>
                       ) : null}
@@ -551,7 +673,8 @@ export function AdminOrdersManager({ embedded = false }: { embedded?: boolean })
                   </td>
                   <td className="px-4 py-4">
                     {order.fulfillmentType === "SHIP" &&
-                    ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"].includes(order.status) &&
+                    canAdminChooseShippingDispatch(order.status, order.fulfillmentType) &&
+                    isMelhorEnvioDispatchAllowed(draft.shippingDispatchMode) &&
                     order.melhorEnvioStatus !== "PURCHASED" ? (
                       <button
                         type="button"

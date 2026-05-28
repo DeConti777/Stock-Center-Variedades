@@ -137,19 +137,15 @@ export function ProductCard({
             </div>
           ) : (
             <>
-              {product.originalPrice ? (
-                <p
-                  className={`hidden text-sm text-[var(--color-muted)] line-through sm:block ${
-                    compact ? "!hidden" : ""
-                  }`}
-                >
-                  {formatCurrency(product.originalPrice)}
+              {hasDiscount ? (
+                <p className="product-card-original-price mb-0.5 text-[11px] leading-none text-[var(--color-muted)] line-through sm:mb-1 sm:text-sm">
+                  {formatCurrency(product.originalPrice!)}
                 </p>
               ) : null}
               <p
-                className={`product-card-price min-w-0 font-black leading-tight tracking-tight text-[var(--color-ink)] ${
-                  compact ? "text-sm sm:text-base" : "text-lg sm:text-2xl lg:text-3xl"
-                }`}
+                className={`product-card-price min-w-0 font-black tracking-tight text-[var(--color-ink)] ${
+                  hasDiscount ? "mt-0 leading-tight" : "leading-tight"
+                } ${compact ? "text-sm sm:text-base" : "text-lg sm:text-2xl lg:text-3xl"}`}
               >
                 {formatCurrency(product.price)}
               </p>

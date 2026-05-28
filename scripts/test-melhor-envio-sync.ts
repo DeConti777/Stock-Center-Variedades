@@ -40,7 +40,7 @@ async function main() {
       cep,
       order.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
     );
-    console.log("Cotacao:", quote.source, quote.shippingCarrier, quote.shippingServiceId);
+    console.log("Cotacao:", quote.source, quote.shippingServiceId, quote.deliveryDays);
 
     if (quote.source !== "melhor_envio" || !quote.shippingServiceId) {
       console.error("Cotacao ME indisponivel. Verifique token e CEP origem.");
@@ -52,7 +52,7 @@ async function main() {
       where: { id: order.id },
       data: {
         melhorEnvioServiceId: quote.shippingServiceId,
-        shippingCarrier: quote.shippingCarrier,
+        shippingCarrier: null,
       },
     });
     console.log("Atualizado melhorEnvioServiceId:", serviceId);

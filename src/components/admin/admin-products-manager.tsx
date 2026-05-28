@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AdminFlashSaleBadge } from "@/components/admin/admin-flash-sale-badge";
 import { ProductEditModal } from "@/components/admin/product-edit-modal";
 import { uploadProductImageClient } from "@/lib/admin-product-upload";
 import { computeDraftCurrencyLabel } from "@/lib/admin-bulk-enrichment";
@@ -766,6 +767,9 @@ export function AdminProductsManager({
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-[var(--color-ink)]">{product.name}</p>
                     <p className="text-xs text-[var(--color-muted)]">{product.category}</p>
+                    <div className="mt-2">
+                      <AdminFlashSaleBadge product={product} />
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -817,6 +821,9 @@ export function AdminProductsManager({
                 <tr>
                   <th className="px-4 py-3 font-semibold text-[var(--color-ink)]">Miniatura</th>
                   <th className="px-4 py-3 font-semibold text-[var(--color-ink)]">Produto</th>
+                  <th className="px-4 py-3 font-semibold text-[var(--color-ink)]">
+                    Oferta relampago
+                  </th>
                   <th className="px-4 py-3 font-semibold text-[var(--color-ink)]">Estoque</th>
                   <th className="px-4 py-3 font-semibold text-[var(--color-ink)]">Açoes</th>
                 </tr>
@@ -828,6 +835,9 @@ export function AdminProductsManager({
                       <AdminProductThumb product={product} />
                     </td>
                     <td className="px-4 py-3">{product.name}</td>
+                    <td className="px-4 py-3">
+                      <AdminFlashSaleBadge product={product} />
+                    </td>
                     <td className="px-4 py-3">
                       <input
                         type="number"

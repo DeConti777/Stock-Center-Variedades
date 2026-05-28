@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { fetchCepAddress } from "@/lib/cep-fetch";
 import { normalizeCartItems } from "@/lib/store-server";
-import { quoteCartShipping } from "@/lib/shipping-quote";
+import { quoteCartShipping, toPublicShippingQuote } from "@/lib/shipping-quote";
 
 const bodySchema = z.object({
   cep: z.string().transform((s) => s.replace(/\D/g, "")),
@@ -14,12 +14,11 @@ const bodySchema = z.object({
       }),
     )
     .optional(),
-  melhorEnvioServiceId: z.number().int().positive().optional(),
 });
 
 /**
- * Cotacao de frete (Melhor Envio + transportadoras) com CEP validado na Brasil API.
- * Opcionalmente envie `items` do carrinho para refletir volumes/seguro por SKU.
+ * Cotacao de frete opaca (sem transportadora) com CEP validado na Brasil API.
+ * Preco via Melhor Envio ou fallback por faixa de CEP.
  */
 export async function POST(request: Request) {
   let json: unknown;
@@ -43,19 +42,16 @@ export async function POST(request: Request) {
   }
 
   const items = normalizeCartItems(parsed.data.items ?? []);
-  const quote = await quoteCartShipping(
-    parsed.data.cep,
-    items,
-    parsed.data.melhorEnvioServiceId ?? null,
-  );
+  const quote = await quoteCartShipping(parsed.data.cep, items);
+  const publicQuote = toPublicShippingQuote(quote);
 
   return NextResponse.json({
     ...address,
-    shippingInCents: quote.shippingInCents,
-    shippingReais: quote.shippingInCents / 100,
-    shippingSource: quote.source,
-    shippingServiceId: quote.shippingServiceId,
-    shippingCarrier: quote.shippingCarrier,
-    shippingOptions: quote.options,
+    shippingInCents: publicQuote.shippingInCents,
+    shippingReais: publicQuote.shippingInCents / 100,
+    quoteSource: publicQuote.quoteSource,
+    ...(publicQuote.deliveryDays != null
+      ? { deliveryDays: publicQuote.deliveryDays }
+      : {}),
   });
 }

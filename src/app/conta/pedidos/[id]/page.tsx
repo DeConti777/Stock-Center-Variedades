@@ -293,7 +293,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 </div>
                 {order.shippingCode || order.trackingUrl ? (
                   <div className="mt-5 rounded-[1.4rem] bg-[var(--color-soft)] p-4 text-sm">
-                    {order.shippingCarrier ? <p>Transportadora: {order.shippingCarrier}</p> : null}
+                    <p>Entrega</p>
                     {order.shippingCode ? <p>Codigo: {order.shippingCode}</p> : null}
                     {order.trackingUrl ? (
                       <a

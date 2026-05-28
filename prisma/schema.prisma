@@ -198,6 +198,10 @@ model Order {
   paymentRetryCount       Int                @default(0)
   shippingCode            String?
   shippingCarrier         String?
+  /// PENDING | MELHOR_ENVIO | OWN_DELIVERY — decisao do admin sobre despacho.
+  shippingDispatchMode    String             @default("PENDING")
+  /// Prazo em dias uteis da cotacao no checkout (nao expoe transportadora ao cliente).
+  shippingQuotedDeliveryDays Int?
   /// ID do servico Melhor Envio escolhido na cotacao (ex.: 1 = PAC).
   melhorEnvioServiceId    String?
   /// ID da etiqueta no carrinho Melhor Envio apos inserir frete.

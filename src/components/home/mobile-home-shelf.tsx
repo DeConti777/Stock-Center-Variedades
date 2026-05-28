@@ -12,11 +12,13 @@ import type { Product } from "@/lib/types";
 type MobileHomeShelfProps = {
   products: Product[];
   featuredProducts: Product[];
+  flashSaleProducts: Product[];
 };
 
 export function MobileHomeShelf({
   products,
   featuredProducts,
+  flashSaleProducts,
 }: MobileHomeShelfProps) {
   const { cartProducts, cartCount, subtotal, visitedProductIds } = useStore();
 
@@ -94,7 +96,7 @@ export function MobileHomeShelf({
       aria-label="Atalhos e recomendacoes"
       className="border-b border-[var(--color-line)] bg-[var(--color-surface)] pb-0 pt-3"
     >
-      <MobileFlashSaleCarousel products={products} />
+      <MobileFlashSaleCarousel products={flashSaleProducts} />
 
       {cartThumbs.length > 0 ? (
         <div className="mx-4 mt-4 rounded-2xl border border-[var(--color-line)] bg-white p-4 shadow-[var(--shadow-soft)]">
