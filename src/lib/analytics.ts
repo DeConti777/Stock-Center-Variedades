@@ -12,7 +12,7 @@ export type EcommerceEventName =
   | "begin_checkout"
   | "checkout_submit"
   | "checkout_submit_error"
-  | "checkout_stripe_handoff"
+  | "checkout_mercadopago_handoff"
   | "checkout_result";
 
 export function isLikelyMobileViewport(): boolean {
