@@ -1,3 +1,62 @@
+function isLocalDevHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return (
+    h === "localhost" ||
+    h.endsWith(".local") ||
+    h === "127.0.0.1" ||
+    h === "[::1]"
+  );
+}
+
+function toHttpsUrl(hostOrUrl: string): string {
+  const trimmed = hostOrUrl.trim();
+  if (trimmed.startsWith("https://")) return trimmed;
+  if (trimmed.startsWith("http://")) {
+    return `https://${trimmed.slice("http://".length)}`;
+  }
+  return `https://${trimmed}`;
+}
+
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+/**
+ * URL publica do site. Em producao na Vercel, ignora NEXT_PUBLIC_APP_URL invalida
+ * (ex.: http://localhost do .env local no deploy) e usa VERCEL_* quando disponivel.
+ */
+export function resolvePublicAppUrl(): string {
+  const explicit = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+
+  if (explicit) {
+    try {
+      const parsed = new URL(explicit);
+      const invalidInProduction =
+        process.env.NODE_ENV === "production" &&
+        (parsed.protocol !== "https:" || isLocalDevHost(parsed.hostname));
+      if (!invalidInProduction) {
+        return stripTrailingSlash(explicit);
+      }
+    } catch {
+      /* tenta fallbacks */
+    }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+    if (vercelProd) {
+      return stripTrailingSlash(toHttpsUrl(vercelProd));
+    }
+
+    const vercelUrl = process.env.VERCEL_URL?.trim();
+    if (vercelUrl) {
+      return stripTrailingSlash(toHttpsUrl(vercelUrl));
+    }
+  }
+
+  return "http://localhost:3000";
+}
+
 export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -11,7 +70,7 @@ export function hasStripeKeys() {
 }
 
 export function getAppUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return resolvePublicAppUrl();
 }
 
 /**
@@ -23,8 +82,8 @@ export function getProductionAppUrlMisconfigurationError(): string | null {
     return null;
   }
 
-  const raw = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
-  if (!raw) {
+  const resolved = resolvePublicAppUrl();
+  if (resolved === "http://localhost:3000") {
     return (
       "NEXT_PUBLIC_APP_URL nao esta definida. Em producao defina a URL publica do site " +
       "(https://seu-dominio.com) nas variaveis de ambiente do deploy."
@@ -33,7 +92,7 @@ export function getProductionAppUrlMisconfigurationError(): string | null {
 
   let parsed: URL;
   try {
-    parsed = new URL(raw);
+    parsed = new URL(resolved);
   } catch {
     return "NEXT_PUBLIC_APP_URL nao e uma URL valida. Use o formato https://seu-dominio.com";
   }
@@ -44,13 +103,7 @@ export function getProductionAppUrlMisconfigurationError(): string | null {
     );
   }
 
-  const host = parsed.hostname.toLowerCase();
-  if (
-    host === "localhost" ||
-    host.endsWith(".local") ||
-    host === "127.0.0.1" ||
-    host === "[::1]"
-  ) {
+  if (isLocalDevHost(parsed.hostname)) {
     return (
       "NEXT_PUBLIC_APP_URL nao pode apontar para localhost em producao. " +
       "Defina o dominio publico real do site (https://...)."
