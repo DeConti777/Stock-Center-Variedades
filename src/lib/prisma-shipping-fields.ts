@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 
+type PrismaRawClient = Pick<PrismaClient, "$executeRaw" | "$queryRaw">;
+
 /** True quando `npx prisma generate` foi executado com o schema atual. */
 export function prismaHasShippingDispatchFields() {
   return (
@@ -45,7 +47,7 @@ export function orderUpdateShippingDispatchExtras(input: {
 
 /** Persiste modo de despacho quando o Prisma Client em cache ainda nao conhece o campo. */
 export async function persistShippingDispatchModeRaw(
-  prisma: PrismaClient,
+  prisma: PrismaRawClient,
   orderId: string,
   shippingDispatchMode: string,
 ) {
@@ -57,7 +59,7 @@ export async function persistShippingDispatchModeRaw(
 }
 
 export async function fetchShippingDispatchModesRaw(
-  prisma: PrismaClient,
+  prisma: PrismaRawClient,
   orderIds: string[],
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
