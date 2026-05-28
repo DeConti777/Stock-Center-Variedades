@@ -174,7 +174,7 @@ export function LoginPageView({ oauthAvailability }: LoginPageViewProps) {
             </div>
           ) : null}
           <div className="mt-6 flex flex-col items-start justify-between gap-3 text-sm text-[var(--color-muted)] sm:flex-row sm:items-center">
-            <span>Checkout seguro com Stripe</span>
+            <span>Checkout seguro com Mercado Pago</span>
             <div className="flex items-center gap-4">
               {loginError ? (
                 <Link

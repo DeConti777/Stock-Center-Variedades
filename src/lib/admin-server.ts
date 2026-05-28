@@ -6,7 +6,14 @@ import {
 import type { Product as ProductType } from "@/lib/types";
 import type { Prisma, Product as PrismaProduct } from "@prisma/client";
 import { getPrismaOrNull } from "@/lib/prisma";
-import { orderUpdateShippingDispatchExtras } from "@/lib/prisma-shipping-fields";
+import {
+  fetchShippingDispatchModesRaw,
+  persistShippingDispatchModeRaw,
+} from "@/lib/prisma-shipping-fields";
+import {
+  normalizeShippingDispatchMode,
+  OWN_DELIVERY_CARRIER_LABEL,
+} from "@/lib/shipping-dispatch";
 import { getEmailKindForOrderStatus, orderToEmailOrder, sendOrderEmail } from "@/lib/email";
 import { resolveFlashSaleEndsAt } from "@/lib/flash-sale";
 import {
@@ -404,6 +411,7 @@ export type AdminOrder = {
   totalInCents: number;
   customerName: string;
   customerEmail: string;
+  shippingAddress: string;
   shippingInCents: number;
   fulfillmentType: string;
   pickupCode?: string | null;
@@ -433,10 +441,31 @@ export async function listAdminOrders(): Promise<AdminOrder[]> {
     throw new Error("Banco de dados nao configurado.");
   }
 
+  const now = new Date();
   const orders = await prisma.order.findMany({
+    where: {
+      NOT: {
+        OR: [
+          { status: "EXPIRED" },
+          {
+            status: "PENDING_PAYMENT",
+            paymentMethodChoice: "PIX",
+            OR: [
+              { inventoryReserveExpiresAt: { lte: now } },
+              { inventoryReserved: false },
+            ],
+          },
+        ],
+      },
+    },
     include: { items: true },
     orderBy: { createdAt: "desc" },
   });
+
+  const dispatchById = await fetchShippingDispatchModesRaw(
+    prisma,
+    orders.map((order) => order.id),
+  );
 
   return orders.map((order) => ({
     id: order.id,
@@ -444,13 +473,15 @@ export async function listAdminOrders(): Promise<AdminOrder[]> {
     totalInCents: order.totalInCents,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
+    shippingAddress: order.shippingAddress,
     shippingInCents: order.shippingInCents,
     fulfillmentType: order.fulfillmentType,
     pickupCode: order.pickupCode,
     shippingCode: order.shippingCode ?? undefined,
     shippingCarrier: order.shippingCarrier ?? undefined,
-    shippingDispatchMode:
-      (order as { shippingDispatchMode?: string }).shippingDispatchMode ?? "PENDING",
+    shippingDispatchMode: normalizeShippingDispatchMode(
+      dispatchById.get(order.id) ?? order.shippingDispatchMode,
+    ),
     shippingQuotedDeliveryDays:
       (order as { shippingQuotedDeliveryDays?: number | null }).shippingQuotedDeliveryDays ??
       null,
@@ -496,44 +527,39 @@ export async function updateOrderStatus(
   }
 
   const now = new Date();
-  const updateData: Record<string, unknown> = {
-    status: input.status,
-    shippingCode: input.shippingCode || null,
-    shippingCarrier: input.shippingCarrier || null,
-    trackingUrl: input.trackingUrl || null,
-    invoiceUrl: input.invoiceUrl || null,
-  };
+  let shippingCarrier =
+    input.shippingCarrier === undefined
+      ? existing.shippingCarrier
+      : input.shippingCarrier;
 
-  const dispatchExtras = orderUpdateShippingDispatchExtras({
-    shippingDispatchMode: input.shippingDispatchMode,
-  });
-  if (dispatchExtras.shippingDispatchMode) {
-    updateData.shippingDispatchMode = dispatchExtras.shippingDispatchMode;
-    if (
-      dispatchExtras.shippingDispatchMode === "OWN_DELIVERY" &&
-      !(input.shippingCarrier?.trim() || existing.shippingCarrier?.trim())
-    ) {
-      updateData.shippingCarrier = "Entrega propria";
+  if (input.shippingDispatchMode === "MELHOR_ENVIO") {
+    const carrier = (shippingCarrier ?? "").trim();
+    if (!carrier || carrier === OWN_DELIVERY_CARRIER_LABEL) {
+      shippingCarrier = null;
     }
-  }
-
-  if (input.status === "PROCESSING" && !existing.processingAt) {
-    updateData.processingAt = now;
-  }
-  if (input.status === "SHIPPED" && !existing.shippedAt) {
-    updateData.shippedAt = now;
-  }
-  if (input.status === "DELIVERED" && !existing.deliveredAt) {
-    updateData.deliveredAt = now;
-  }
-  if (input.status === "CANCELED" && !existing.canceledAt) {
-    updateData.canceledAt = now;
+  } else if (
+    input.shippingDispatchMode === "OWN_DELIVERY" &&
+    !(shippingCarrier?.trim() || existing.shippingCarrier?.trim())
+  ) {
+    shippingCarrier = OWN_DELIVERY_CARRIER_LABEL;
   }
 
   const order = await prisma.order.update({
     where: { id: orderId },
     data: {
-      ...updateData,
+      status: input.status,
+      shippingCode: input.shippingCode || null,
+      shippingCarrier: shippingCarrier || null,
+      trackingUrl: input.trackingUrl || null,
+      invoiceUrl: input.invoiceUrl || null,
+      ...(input.status === "PROCESSING" && !existing.processingAt
+        ? { processingAt: now }
+        : {}),
+      ...(input.status === "SHIPPED" && !existing.shippedAt ? { shippedAt: now } : {}),
+      ...(input.status === "DELIVERED" && !existing.deliveredAt
+        ? { deliveredAt: now }
+        : {}),
+      ...(input.status === "CANCELED" && !existing.canceledAt ? { canceledAt: now } : {}),
       checkoutEvents: {
         create: {
           userId: existing.userId,
@@ -541,10 +567,7 @@ export async function updateOrderStatus(
           message: `Status alterado de ${existing.status} para ${input.status}.`,
           metadata: JSON.stringify({
             shippingCode: input.shippingCode || null,
-            shippingCarrier:
-              ((updateData.shippingCarrier as string | null) ??
-                input.shippingCarrier) ||
-              null,
+            shippingCarrier: shippingCarrier || null,
             shippingDispatchMode: input.shippingDispatchMode || null,
             trackingUrl: input.trackingUrl || null,
             invoiceUrl: input.invoiceUrl || null,
@@ -554,6 +577,10 @@ export async function updateOrderStatus(
     },
     include: { items: true },
   });
+
+  if (input.shippingDispatchMode) {
+    await persistShippingDispatchModeRaw(prisma, orderId, input.shippingDispatchMode);
+  }
 
   if (existing.status !== input.status) {
     const emailKind = getEmailKindForOrderStatus(input.status);

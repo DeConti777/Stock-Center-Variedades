@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatCurrency } from "@/lib/catalog";
+import { formatPublicOrderId } from "@/lib/format-public-order-id";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import {
   AccountMenuRow,
@@ -190,7 +191,7 @@ export function AccountPageView({
         <div className="mt-6 space-y-4">
           {recentOrders.length ? (
             recentOrders.map((order) => {
-              const orderCode = order.id.slice(0, 8).toUpperCase();
+              const orderCode = formatPublicOrderId(order.id);
               const orderDate = new Date(order.createdAt).toLocaleDateString("pt-BR");
               const orderTotal = formatCurrency(order.totalInCents / 100);
               const orderStatus = getOrderStatusLabel(order.status);

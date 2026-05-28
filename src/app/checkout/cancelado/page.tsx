@@ -6,14 +6,15 @@ import { PostCheckoutRegisterCta } from "@/components/checkout/post-checkout-reg
 import { PageHighlight } from "@/components/ui/page-highlight";
 
 type CanceledPageProps = {
-  searchParams: Promise<{ order_id?: string }>;
+  searchParams: Promise<{ order_id?: string; reason?: string }>;
 };
 
 export default async function CheckoutCanceledPage({
   searchParams,
 }: CanceledPageProps) {
   const session = await auth();
-  const { order_id } = await searchParams;
+  const { order_id, reason } = await searchParams;
+  const isPixExpired = reason === "expired";
   const prisma = getPrismaOrNull();
   const canceledOrder =
     prisma && order_id
@@ -30,9 +31,17 @@ export default async function CheckoutCanceledPage({
         payload={{ status: "canceled", reason: "payment_not_completed" }}
       />
       <PageHighlight
-        eyebrow="Checkout cancelado"
-        title="Seu carrinho continua salvo para voce tentar de novo."
-        description="Revise os itens, ajuste a forma de pagamento e finalize quando quiser."
+        eyebrow={isPixExpired ? "Pix expirado" : "Checkout cancelado"}
+        title={
+          isPixExpired
+            ? "O prazo de 10 minutos para pagamento encerrou."
+            : "Seu carrinho continua salvo para voce tentar de novo."
+        }
+        description={
+          isPixExpired
+            ? "Gere um novo pedido no checkout para receber outro QR Code Pix."
+            : "Revise os itens, ajuste a forma de pagamento e finalize quando quiser."
+        }
       />
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link

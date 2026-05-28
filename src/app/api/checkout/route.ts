@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/auth";
+import {
+  buildPixCheckoutUrl,
+  generatePixAccessToken,
+} from "@/lib/pix-checkout-access";
 import {
   isValidCpfDigits,
   isValidEmail,
@@ -9,111 +12,19 @@ import {
   sanitizeUf,
 } from "@/lib/br-fields";
 import { lookupCepWithShipping } from "@/lib/cep-fetch";
-import { getAppUrl, getProductionAppUrlMisconfigurationError } from "@/lib/env";
-import { getStripe, getStripeSecretConfigError } from "@/lib/stripe";
+import { getProductionAppUrlMisconfigurationError } from "@/lib/env";
+import { getMercadoPagoConfigError } from "@/lib/mercado-pago";
+import { createMercadoPagoCheckoutProPreference } from "@/lib/mercado-pago-checkout-pro";
+import { createMercadoPagoPixPayment } from "@/lib/mercado-pago-pix-payment";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { createDraftOrder, type CheckoutInput } from "@/lib/store-server";
 import { orderToEmailOrder, sendOrderEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
-  PIX_RESERVE_TTL_SECONDS,
   releaseInventoryReservation,
   reserveInventoryForPixOrder,
 } from "@/lib/pix-inventory";
 import type { FulfillmentType, PaymentMethodChoice } from "@/lib/types";
-
-type OrderWithItems = Awaited<ReturnType<typeof createDraftOrder>>;
-
-type StripeCheckoutSessionCreateParams = Parameters<
-  InstanceType<typeof Stripe>["checkout"]["sessions"]["create"]
->[0];
-
-function isStripePixUnsupportedError(err: unknown): boolean {
-  if (!(err instanceof Stripe.errors.StripeError)) return false;
-  const m = (err.message || "").toLowerCase();
-  return (
-    m.includes("pix") &&
-    (m.includes("invalid") ||
-      m.includes("not activated") ||
-      m.includes("enabled in your dashboard"))
-  );
-}
-
-function checkoutSessionCreateParams(
-  order: OrderWithItems,
-  userId: string,
-  paymentMethodTypes: ("card" | "pix")[],
-  stripePaymentRail: "pix" | "card",
-) {
-  const isPickup = order.fulfillmentType === "PICKUP";
-  return {
-    mode: "payment" as const,
-    locale: "pt-BR" as const,
-    payment_method_types: paymentMethodTypes,
-    ...(stripePaymentRail === "pix"
-      ? {
-          payment_method_options: {
-            pix: {
-              expires_after_seconds: PIX_RESERVE_TTL_SECONDS,
-            },
-          },
-        }
-      : {}),
-    billing_address_collection: "required" as const,
-    customer_email: order.customerEmail,
-    phone_number_collection: { enabled: true },
-    ...(isPickup
-      ? {}
-      : {
-          shipping_address_collection: {
-            allowed_countries: ["BR"],
-          },
-          shipping_options: [
-            {
-              shipping_rate_data: {
-                type: "fixed_amount",
-                tax_behavior: "unspecified",
-                fixed_amount: {
-                  amount: order.shippingInCents,
-                  currency: "brl",
-                },
-                display_name: "Entrega",
-              },
-            },
-          ],
-        }),
-    line_items: order.items.map((item) => ({
-      quantity: 1,
-      price_data: {
-        currency: "brl",
-        unit_amount:
-          item.lineTotalInCents || item.unitPriceInCents * item.quantity,
-        product_data: {
-          name:
-            item.quantity > 1
-              ? `${item.productName} x${item.quantity}`
-              : item.productName,
-          description: `Stock Center Variedades - ${item.category}`,
-          images: [],
-          metadata: {
-            productId: item.productId,
-            orderId: order.id,
-            quantity: String(item.quantity),
-          },
-        },
-      },
-    })),
-    success_url: `${getAppUrl()}/checkout/sucesso?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${getAppUrl()}/checkout/cancelado?order_id=${order.id}`,
-    metadata: {
-      orderId: order.id,
-      userId,
-      paymentMethodChoice: order.paymentMethodChoice,
-      stripePaymentRail,
-      fulfillmentType: order.fulfillmentType,
-    },
-  } as StripeCheckoutSessionCreateParams;
-}
 
 function validateCheckoutFields(
   body: CheckoutInput,
@@ -275,11 +186,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: appUrlConfigError }, { status: 503 });
   }
 
-  const stripeConfigError = getStripeSecretConfigError(
-    process.env.STRIPE_SECRET_KEY,
-  );
-  if (stripeConfigError) {
-    return NextResponse.json({ error: stripeConfigError }, { status: 503 });
+  const mpConfigError = getMercadoPagoConfigError();
+  if (mpConfigError) {
+    return NextResponse.json({ error: mpConfigError }, { status: 503 });
   }
 
   let body: CheckoutInput;
@@ -420,70 +329,111 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stripe = getStripe();
+    if (normalized.paymentMethod === "PIX") {
+      const pixAccessToken = generatePixAccessToken();
+      let pixPayment;
 
-    const wantsPixOnStripe = normalized.paymentMethod === "PIX";
-    const preferredTypes: ("card" | "pix")[] = wantsPixOnStripe
-      ? ["pix"]
-      : ["card"];
-
-    let checkoutSession: Stripe.Checkout.Session;
-    let stripePaymentRail: "pix" | "card" = wantsPixOnStripe ? "pix" : "card";
-
-    try {
-      checkoutSession = await stripe.checkout.sessions.create(
-        checkoutSessionCreateParams(
-          order,
-          checkoutUser.userId,
-          preferredTypes,
-          stripePaymentRail,
-        ),
-      );
-    } catch (firstErr) {
-      if (wantsPixOnStripe && isStripePixUnsupportedError(firstErr)) {
-        stripePaymentRail = "card";
-        await prisma.checkoutEvent.create({
-          data: {
-            orderId: order.id,
-            userId: checkoutUser.userId,
-            type: "PIX_FALLBACK_CARD",
-            message:
-              "Stripe recusou Pix na conta atual; checkout criado com cartao.",
-          },
+      try {
+        pixPayment = await createMercadoPagoPixPayment({
+          id: order.id,
+          totalInCents: order.totalInCents,
+          customerEmail: order.customerEmail,
+          customerName: order.customerName,
+          customerCpf: order.customerCpf,
+          inventoryReserveExpiresAt: order.inventoryReserveExpiresAt,
         });
-        checkoutSession = await stripe.checkout.sessions.create(
-          checkoutSessionCreateParams(
-            order,
-            checkoutUser.userId,
-            ["card"],
-            stripePaymentRail,
-          ),
+      } catch (mpErr) {
+        const mpMessage =
+          mpErr instanceof Error
+            ? mpErr.message
+            : "Falha ao criar pagamento Pix no Mercado Pago.";
+
+        if (inventoryReservedForPix) {
+          await releaseInventoryReservation(prisma, {
+            orderId: order.id,
+            reason: "CHECKOUT_ERROR",
+            nextStatus: "FAILED",
+          }).catch(() => null);
+        }
+
+        await prisma.checkoutEvent
+          .create({
+            data: {
+              orderId: order.id,
+              userId: checkoutUser.userId,
+              type: "MP_PIX_FAILED",
+              message: mpMessage,
+            },
+          })
+          .catch(() => null);
+
+        return NextResponse.json(
+          {
+            error: mpMessage,
+          },
+          { status: 502 },
         );
-      } else {
-        throw firstErr;
       }
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          mercadoPagoPaymentId: pixPayment.paymentId,
+          pixAccessToken,
+          paymentAttempts: {
+            create: {
+              provider: "MERCADO_PAGO",
+              methodChoice: "PIX",
+              mercadoPagoPaymentId: pixPayment.paymentId,
+              status: "CREATED",
+            },
+          },
+          checkoutEvents: {
+            create: {
+              userId: checkoutUser.userId,
+              type: "MP_PIX_CREATED",
+              message: "Pagamento Pix criado no Mercado Pago.",
+              metadata: JSON.stringify({
+                mercadoPagoPaymentId: pixPayment.paymentId,
+                checkoutType: checkoutUser.isGuest ? "guest" : "authenticated",
+              }),
+            },
+          },
+        },
+      });
+
+      await sendOrderEmail("ORDER_CREATED", orderToEmailOrder(order));
+
+      return NextResponse.json({
+        pixUrl: buildPixCheckoutUrl(order.id, pixAccessToken),
+      });
     }
+
+    const checkoutPro = await createMercadoPagoCheckoutProPreference({
+      id: order.id,
+      totalInCents: order.totalInCents,
+      customerEmail: order.customerEmail,
+      customerName: order.customerName,
+      customerCpf: order.customerCpf,
+    });
 
     await prisma.order.update({
       where: { id: order.id },
       data: {
-        stripeCheckoutSessionId: checkoutSession.id,
-        stripeCustomerEmail: checkoutSession.customer_email ?? order.customerEmail,
         paymentAttempts: {
           create: {
-            methodChoice: normalized.paymentMethod,
-            stripeCheckoutSessionId: checkoutSession.id,
+            provider: "MERCADO_PAGO",
+            methodChoice: "CARD",
             status: "CREATED",
           },
         },
         checkoutEvents: {
           create: {
             userId: checkoutUser.userId,
-            type: "STRIPE_SESSION_CREATED",
-            message: "Sessao de checkout criada na Stripe.",
+            type: "MP_CHECKOUT_PRO_CREATED",
+            message: "Preferencia de pagamento (cartao) criada no Mercado Pago.",
             metadata: JSON.stringify({
-              stripeCheckoutSessionId: checkoutSession.id,
-              stripePaymentRail,
+              mercadoPagoPreferenceId: checkoutPro.preferenceId,
               checkoutType: checkoutUser.isGuest ? "guest" : "authenticated",
             }),
           },
@@ -493,21 +443,14 @@ export async function POST(request: Request) {
 
     await sendOrderEmail("ORDER_CREATED", orderToEmailOrder(order));
 
-    if (!checkoutSession.url) {
-      throw new Error("Sessao Stripe sem URL de redirecionamento.");
-    }
-
     return NextResponse.json({
-      url: checkoutSession.url,
+      url: checkoutPro.checkoutUrl,
     });
   } catch (err) {
-    const stripeError =
-      err instanceof Stripe.errors.StripeError
-        ? {
-            code: err.code ?? null,
-            message: err.message,
-          }
-        : null;
+    const mpMessage =
+      err instanceof Error
+        ? err.message
+        : "Erro ao iniciar pagamento no Mercado Pago.";
 
     if (inventoryReservedForPix) {
       await releaseInventoryReservation(prisma, {
@@ -527,59 +470,23 @@ export async function POST(request: Request) {
             : {}),
           paymentAttempts: {
             create: {
+              provider: "MERCADO_PAGO",
               methodChoice: normalized.paymentMethod,
               status: "FAILED",
-              errorCode: stripeError?.code,
-              errorMessage:
-                err instanceof Error
-                  ? err.message
-                  : "Erro ao criar sessao Stripe.",
+              errorMessage: mpMessage,
             },
           },
           checkoutEvents: {
             create: {
               userId: checkoutUser.userId,
-              type: "STRIPE_SESSION_FAILED",
-              message:
-                err instanceof Error
-                  ? err.message
-                  : "Erro ao iniciar pagamento na Stripe.",
-              metadata: JSON.stringify(stripeError),
+              type: "MP_CHECKOUT_FAILED",
+              message: mpMessage,
             },
           },
         },
       })
       .catch(() => null);
 
-    if (err instanceof Error && !(err instanceof Stripe.errors.StripeError)) {
-      return NextResponse.json({ error: err.message }, { status: 502 });
-    }
-
-    if (err instanceof Stripe.errors.StripeError) {
-      if (
-        err.type === "StripeAuthenticationError" ||
-        err.code === "api_key_invalid"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Chave da Stripe recusada. No painel em Developers > API keys, copie a Secret key completa (sk_test_...) para STRIPE_SECRET_KEY no .env, salve e reinicie o servidor (npm run dev).",
-          },
-          { status: 502 },
-        );
-      }
-
-      return NextResponse.json(
-        {
-          error: err.message,
-          stripeCode: err.code ?? undefined,
-        },
-        { status: 502 },
-      );
-    }
-
-    const message =
-      err instanceof Error ? err.message : "Erro ao iniciar pagamento na Stripe.";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: mpMessage }, { status: 502 });
   }
 }

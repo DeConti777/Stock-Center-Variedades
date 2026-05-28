@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { cancelMercadoPagoPayment } from "@/lib/mercado-pago";
 
-export const PIX_RESERVE_TTL_SECONDS = 1_800;
+export const PIX_RESERVE_TTL_SECONDS = 600;
 
 type PrismaTx = Prisma.TransactionClient;
 
@@ -181,11 +182,15 @@ export async function expireReservedPixOrders(
     },
     select: {
       id: true,
+      mercadoPagoPaymentId: true,
     },
   });
 
   let releasedCount = 0;
   for (const order of expired) {
+    if (order.mercadoPagoPaymentId) {
+      await cancelMercadoPagoPayment(order.mercadoPagoPaymentId);
+    }
     const released = await releaseInventoryReservation(prisma, {
       orderId: order.id,
       reason: "PAYMENT_EXPIRED",

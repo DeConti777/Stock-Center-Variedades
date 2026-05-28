@@ -192,14 +192,18 @@ model Order {
   stripeCheckoutSessionId String?            @unique
   stripeCustomerEmail     String?
   stripePaymentIntentId   String?
+  /// ID do pagamento Pix no Mercado Pago (conta propria).
+  mercadoPagoPaymentId    String?
+  /// Token de acesso a pagina Pix (QR) sem login.
+  pixAccessToken          String?
   inventoryReserved       Boolean            @default(false)
   inventoryReservedAt     DateTime?
   inventoryReserveExpiresAt DateTime?
   paymentRetryCount       Int                @default(0)
   shippingCode            String?
   shippingCarrier         String?
-  /// PENDING | MELHOR_ENVIO | OWN_DELIVERY — decisao do admin sobre despacho.
-  shippingDispatchMode    String             @default("PENDING")
+  /// MELHOR_ENVIO | OWN_DELIVERY — decisao do admin sobre despacho (padrao: entrega Stock Center).
+  shippingDispatchMode    String             @default("OWN_DELIVERY")
   /// Prazo em dias uteis da cotacao no checkout (nao expoe transportadora ao cliente).
   shippingQuotedDeliveryDays Int?
   /// ID do servico Melhor Envio escolhido na cotacao (ex.: 1 = PAC).
@@ -346,6 +350,7 @@ model PaymentAttempt {
   methodChoice            String
   stripeCheckoutSessionId String?
   stripePaymentIntentId   String?
+  mercadoPagoPaymentId    String?
   status                  String
   errorCode               String?
   errorMessage            String?

@@ -4,7 +4,13 @@ import {
   isMelhorEnvioConfigured,
   melhorEnvioBaseUrl,
 } from "@/lib/melhor-envio";
-import { isMelhorEnvioDispatchAllowed } from "@/lib/shipping-dispatch";
+import { fetchShippingDispatchModesRaw } from "@/lib/prisma-shipping-fields";
+import { quoteCartShipping } from "@/lib/shipping-quote";
+import {
+  isMelhorEnvioDispatchAllowed,
+  normalizeShippingDispatchMode,
+} from "@/lib/shipping-dispatch";
+import type { CartItem } from "@/lib/types";
 import {
   aggregatePackageVolume,
   resolvePackageDims,
@@ -217,6 +223,89 @@ function resolveServiceId(order: Order): number | null {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+type ServiceResolveResult =
+  | { ok: true; serviceId: number; quoted: boolean }
+  | { ok: false; skipped: true; reason: string };
+
+/** Usa servico salvo no pedido ou recota no ME (checkout com frete fallback / pedidos antigos). */
+async function resolveOrQuoteMelhorEnvioServiceId(
+  prisma: DbClient,
+  order: Order & { items: OrderItem[] },
+): Promise<ServiceResolveResult> {
+  const existing = resolveServiceId(order);
+  if (existing) {
+    return { ok: true, serviceId: existing, quoted: false };
+  }
+
+  const address = parseShippingAddress(order.shippingAddress);
+  const cep = onlyDigits(address?.cep ?? "", 8);
+  if (cep.length !== 8) {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        "CEP de entrega invalido ou ausente. Corrija o endereco do pedido antes de enviar ao Melhor Envio.",
+    };
+  }
+
+  const cartItems: CartItem[] = order.items
+    .filter((item) => item.productId && item.quantity > 0)
+    .map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+
+  if (cartItems.length === 0) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "Pedido sem itens validos para cotar frete no Melhor Envio.",
+    };
+  }
+
+  const quote = await quoteCartShipping(cep, cartItems);
+  if (!quote.shippingServiceId || quote.source !== "melhor_envio") {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        "Nao foi possivel cotar no Melhor Envio para este pedido. Verifique token ME, CEP de origem (SHIPPING_ORIGIN_POSTAL_CODE) e dimensoes dos produtos.",
+    };
+  }
+
+  const serviceId = Number(quote.shippingServiceId);
+  if (!Number.isFinite(serviceId) || serviceId <= 0) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "Cotacao Melhor Envio retornou servico invalido.",
+    };
+  }
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      melhorEnvioServiceId: String(serviceId),
+      melhorEnvioError: null,
+    },
+  });
+
+  await recordMelhorEnvioEvent(
+    prisma,
+    order,
+    "MELHOR_ENVIO_SERVICE_QUOTED",
+    "Servico de envio obtido por recotacao antes de gerar etiqueta.",
+    {
+      serviceId,
+      cep,
+      optionName: quote.options[0]?.name ?? null,
+      company: quote.options[0]?.company ?? null,
+    },
+  );
+
+  return { ok: true, serviceId, quoted: true };
+}
+
 function buildProductsFromItems(items: OrderItem[]) {
   return items.map((item) => ({
     name: item.productName.slice(0, 80),
@@ -371,15 +460,13 @@ export async function syncMelhorEnvioForPaidOrder(
     return { ok: false, skipped: true, reason: "Pedido e retirada na loja." };
   }
 
-  const dispatchMode = orderInput.shippingDispatchMode ?? "PENDING";
+  const dispatchMode = normalizeShippingDispatchMode(orderInput.shippingDispatchMode);
   if (!isMelhorEnvioDispatchAllowed(dispatchMode)) {
     return {
       ok: false,
       skipped: true,
       reason:
-        dispatchMode === "OWN_DELIVERY"
-          ? "Pedido marcado para entrega propria (van). Altere o modo de despacho no admin para usar Melhor Envio."
-          : "Defina o modo de despacho como Melhor Envio no painel admin antes de sincronizar.",
+        "Pedido marcado para entrega Stock Center Variedades. Altere o modo de despacho no admin para usar Melhor Envio.",
     };
   }
 
@@ -387,14 +474,15 @@ export async function syncMelhorEnvioForPaidOrder(
     return { ok: false, skipped: true, reason: "Melhor Envio nao configurado." };
   }
 
-  const service = resolveServiceId(orderInput);
-  if (!service) {
+  const serviceResult = await resolveOrQuoteMelhorEnvioServiceId(prisma, orderInput);
+  if (!serviceResult.ok) {
     return {
       ok: false,
       skipped: true,
-      reason: "Pedido sem servico Melhor Envio (frete fallback ou antigo).",
+      reason: serviceResult.reason,
     };
   }
+  const service = serviceResult.serviceId;
 
   if (orderInput.melhorEnvioStatus === "PURCHASED" && orderInput.melhorEnvioShipmentId) {
     return {
@@ -550,5 +638,11 @@ export async function syncMelhorEnvioForOrderId(
     };
   }
 
-  return syncMelhorEnvioForPaidOrder(prisma, order);
+  const dispatchById = await fetchShippingDispatchModesRaw(prisma, [orderId]);
+  const orderForSync = {
+    ...order,
+    shippingDispatchMode: dispatchById.get(orderId) ?? order.shippingDispatchMode ?? "OWN_DELIVERY",
+  };
+
+  return syncMelhorEnvioForPaidOrder(prisma, orderForSync);
 }

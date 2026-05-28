@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { PrismaClient } from "@prisma/client";
 import {
+  PIX_RESERVE_TTL_SECONDS,
   expireReservedPixOrders,
   releaseInventoryReservation,
   reserveInventoryForPixOrder,
@@ -99,6 +100,10 @@ function makeFakePrisma(seed: { stock: number; orders: FakeOrder[] }) {
     getOrder: (id: string) => orders.get(id),
   };
 }
+
+test("PIX_RESERVE_TTL_SECONDS is 10 minutes", () => {
+  assert.equal(PIX_RESERVE_TTL_SECONDS, 600);
+});
 
 test("Pix criado reserva estoque", async () => {
   const fake = makeFakePrisma({

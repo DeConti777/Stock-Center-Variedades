@@ -3,12 +3,18 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { formatCurrency } from "@/lib/catalog";
+import { formatPublicOrderId } from "@/lib/format-public-order-id";
 import {
   customerOrderTimeline,
   getOrderStatusLabel,
   getReachedOrderStatusIndex,
 } from "@/lib/order-status";
 import { getPrismaOrNull } from "@/lib/prisma";
+import {
+  buildPixCheckoutUrl,
+  isPixPaymentWindowExpired,
+} from "@/lib/pix-checkout-access";
+import { syncPaidOrderFromOrderIdMercadoPago } from "@/lib/mercado-pago-checkout-sync";
 import { syncPaidOrderFromCheckoutSessionId } from "@/lib/stripe-checkout-sync";
 import { whatsappLink } from "@/lib/site-data";
 import { OrderItemThumbnail } from "@/components/account/order-items-preview";
@@ -24,7 +30,7 @@ export async function generateMetadata({
 }: OrderDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   return {
-    title: `Pedido ${id.slice(0, 8).toUpperCase()}`,
+    title: `Pedido ${formatPublicOrderId(id)}`,
     description: "Detalhes do pedido, rastreamento, pagamento e nota fiscal.",
   };
 }
@@ -85,11 +91,24 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
     notFound();
   }
 
-  if (
-    order.status === "PENDING_PAYMENT" &&
-    order.stripeCheckoutSessionId
-  ) {
+  if (order.status === "PENDING_PAYMENT" && order.stripeCheckoutSessionId) {
     await syncPaidOrderFromCheckoutSessionId(prisma, order.stripeCheckoutSessionId);
+    order =
+      (await prisma.order.findFirst({
+        where: { id, userId: session.user.id },
+        include: {
+          items: true,
+          notificationLogs: {
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          },
+        },
+      })) ?? order;
+  } else if (
+    order.status === "PENDING_PAYMENT" &&
+    order.mercadoPagoPaymentId
+  ) {
+    await syncPaidOrderFromOrderIdMercadoPago(prisma, order.id);
     order =
       (await prisma.order.findFirst({
         where: { id, userId: session.user.id },
@@ -103,24 +122,42 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       })) ?? order;
   }
 
+  const pixPayUrl =
+    order.status === "PENDING_PAYMENT" &&
+    order.paymentMethodChoice === "PIX" &&
+    order.pixAccessToken &&
+    !isPixPaymentWindowExpired(order)
+      ? buildPixCheckoutUrl(order.id, order.pixAccessToken)
+      : null;
+
   const address = parseShippingAddress(order.shippingAddress);
   const reachedIndex = getReachedOrderStatusIndex(order.status);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
       <PageHighlight
-        eyebrow={`Pedido ${order.id.slice(0, 8).toUpperCase()}`}
+        eyebrow={`Pedido ${formatPublicOrderId(order.id)}`}
         title={getOrderStatusLabel(order.status)}
         description={`Criado em ${order.createdAt.toLocaleDateString("pt-BR")} · Total ${formatCurrency(order.totalInCents / 100)}`}
       >
-        <RebuyOrderButton
-          orderId={order.id}
-          items={order.items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          }))}
-          className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white"
-        />
+        <div className="flex flex-wrap gap-3">
+          {pixPayUrl ? (
+            <Link
+              href={pixPayUrl}
+              className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-bold text-white"
+            >
+              Pagar com Pix
+            </Link>
+          ) : null}
+          <RebuyOrderButton
+            orderId={order.id}
+            items={order.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            }))}
+            className="inline-flex items-center justify-center rounded-full border border-[var(--color-line)] bg-white px-5 py-3 text-sm font-bold text-[var(--color-ink)]"
+          />
+        </div>
       </PageHighlight>
 
       <section className="rounded-[2rem] border border-[var(--color-line)] bg-white p-6">

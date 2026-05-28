@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { fetchCepAddress } from "@/lib/cep-fetch";
+import { resolveCepAddress } from "@/lib/cep-fetch";
 import { normalizeCartItems } from "@/lib/store-server";
 import { quoteCartShipping, toPublicShippingQuote } from "@/lib/shipping-quote";
 
 const bodySchema = z.object({
   cep: z.string().transform((s) => s.replace(/\D/g, "")),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  street: z.string().optional(),
+  neighborhood: z.string().optional(),
   items: z
     .array(
       z.object({
@@ -17,7 +21,7 @@ const bodySchema = z.object({
 });
 
 /**
- * Cotacao de frete opaca (sem transportadora) com CEP validado na Brasil API.
+ * Cotacao de frete opaca (sem transportadora) com CEP validado (Brasil API / ViaCEP).
  * Preco via Melhor Envio ou fallback por faixa de CEP.
  */
 export async function POST(request: Request) {
@@ -36,7 +40,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const address = await fetchCepAddress(parsed.data.cep);
+  const address = await resolveCepAddress(parsed.data.cep, {
+    city: parsed.data.city,
+    state: parsed.data.state,
+    street: parsed.data.street,
+    neighborhood: parsed.data.neighborhood,
+  });
   if (!address) {
     return NextResponse.json({ error: "CEP nao encontrado." }, { status: 404 });
   }

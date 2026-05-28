@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { OrderItemsPreview } from "@/components/account/order-items-preview";
 import { formatCurrency } from "@/lib/catalog";
+import { formatPublicOrderId } from "@/lib/format-public-order-id";
 import { getOrderStatusLabel } from "@/lib/order-status";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { RebuyOrderButton } from "@/components/account/rebuy-order-button";
@@ -63,7 +64,7 @@ export default async function CustomerOrdersPage() {
                       <p className="truncate font-semibold text-[var(--color-ink)]">
                         Pedido{" "}
                         <span className="font-mono tracking-wide">
-                          {order.id.slice(0, 8).toUpperCase()}
+                          {formatPublicOrderId(order.id)}
                         </span>
                       </p>
                       <p className="mt-1 text-sm text-[var(--color-muted)]">

@@ -1,3 +1,4 @@
+import { formatPublicOrderId } from "@/lib/format-public-order-id";
 import { getAppUrl } from "@/lib/env";
 import { getPrismaOrNull } from "@/lib/prisma";
 
@@ -139,12 +140,12 @@ function parseShippingAddress(raw: string) {
 }
 
 function getEmailContent(kind: OrderEmailKind, order: EmailOrder) {
-  const shortId = order.id.slice(0, 8).toUpperCase();
+  const publicId = formatPublicOrderId(order.id);
   const isPickup = order.fulfillmentType === "PICKUP";
 
   if (kind === "ORDER_CREATED" && isPickup) {
     return {
-      subject: `Recebemos seu pedido #${shortId} (retirada na loja)`,
+      subject: `Recebemos seu pedido ${publicId} (retirada na loja)`,
       eyebrow: "Pedido recebido",
       title: "Seu pedido foi criado e esta aguardando pagamento.",
       lead: "Apos a confirmacao do pagamento, voce recebera neste e-mail o codigo para retirar na loja.",
@@ -153,7 +154,7 @@ function getEmailContent(kind: OrderEmailKind, order: EmailOrder) {
 
   if (kind === "PAYMENT_CONFIRMED" && isPickup) {
     return {
-      subject: `Pagamento confirmado — retirada #${shortId}`,
+      subject: `Pagamento confirmado — retirada ${publicId}`,
       eyebrow: "Retirada na loja",
       title: "Pagamento confirmado. Use o codigo abaixo para retirar seu pedido.",
       lead:
@@ -166,25 +167,25 @@ function getEmailContent(kind: OrderEmailKind, order: EmailOrder) {
     { subject: string; eyebrow: string; title: string; lead: string }
   > = {
     ORDER_CREATED: {
-      subject: `Recebemos seu pedido #${shortId}`,
+      subject: `Recebemos seu pedido ${publicId}`,
       eyebrow: "Pedido recebido",
       title: "Seu pedido foi criado e esta aguardando pagamento.",
-      lead: "Assim que a Stripe confirmar o pagamento, a equipe Stock Center inicia a separacao.",
+      lead: "Assim que o Mercado Pago confirmar o pagamento, a equipe Stock Center inicia a separacao.",
     },
     PAYMENT_CONFIRMED: {
-      subject: `Pagamento confirmado do pedido #${shortId}`,
+      subject: `Pagamento confirmado do pedido ${publicId}`,
       eyebrow: "Pagamento aprovado",
       title: "Pagamento confirmado. Agora vamos preparar tudo.",
       lead: "Seu pedido entrou na fila de expedicao e voce recebera novas atualizacoes por email.",
     },
     PREPARING: {
-      subject: `Pedido #${shortId} em preparacao`,
+      subject: `Pedido ${publicId} em preparacao`,
       eyebrow: "Preparacao",
       title: "Estamos separando seus produtos.",
       lead: "A equipe conferiu o pagamento e esta preparando seu pedido para envio.",
     },
     SHIPPED: {
-      subject: `Pedido #${shortId} enviado`,
+      subject: `Pedido ${publicId} enviado`,
       eyebrow: "Pedido enviado",
       title: "Seu pedido saiu para transporte.",
       lead: order.trackingUrl
@@ -192,13 +193,13 @@ function getEmailContent(kind: OrderEmailKind, order: EmailOrder) {
         : "O codigo de rastreio foi registrado no pedido.",
     },
     DELIVERED: {
-      subject: `Pedido #${shortId} entregue`,
+      subject: `Pedido ${publicId} entregue`,
       eyebrow: "Entrega concluida",
       title: "Entrega confirmada. Obrigado pela compra.",
       lead: "Esperamos que sua experiencia com a Stock Center tenha sido excelente.",
     },
     PAYMENT_FAILED: {
-      subject: `Nao conseguimos confirmar o pedido #${shortId}`,
+      subject: `Nao conseguimos confirmar o pedido ${publicId}`,
       eyebrow: "Pagamento nao confirmado",
       title: "O pagamento nao foi confirmado.",
       lead: "Voce pode voltar ao checkout e tentar novamente com outro metodo de pagamento.",
@@ -280,7 +281,7 @@ function renderOrderEmail(kind: OrderEmailKind, order: EmailOrder) {
               <td style="padding:30px;">
                 <p style="margin:0;color:#374151;">Ola, <strong>${escapeHtml(order.customerName)}</strong>.</p>
                 <p style="margin:12px 0 0;color:#6b7280;line-height:1.6;">
-                  Pedido <strong>#${escapeHtml(order.id)}</strong>, criado em ${order.createdAt.toLocaleDateString("pt-BR")}.
+                  Pedido <strong>${escapeHtml(formatPublicOrderId(order.id))}</strong>, criado em ${order.createdAt.toLocaleDateString("pt-BR")}.
                 </p>
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
                   ${itemsHtml}

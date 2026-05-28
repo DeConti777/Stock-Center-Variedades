@@ -3,7 +3,10 @@ import { products as fallbackProducts } from "@/lib/site-data";
 import { onlyDigits } from "@/lib/br-fields";
 import { getPrismaOrNull } from "@/lib/prisma";
 import { getShippingInCentsFromCep } from "@/lib/shipping";
-import { orderCreateShippingFieldExtras } from "@/lib/prisma-shipping-fields";
+import {
+  orderCreateShippingFieldExtras,
+  persistShippingDispatchModeRaw,
+} from "@/lib/prisma-shipping-fields";
 import { quoteCartShipping } from "@/lib/shipping-quote";
 import { applyFlashSalePricing } from "@/lib/flash-sale";
 import { fetchFlashSaleDiscountMap } from "@/lib/prisma-product-map";
@@ -504,6 +507,11 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
     );
     const totalInCents = subtotalInCents + shippingQuote.shippingInCents;
 
+    const initialDispatchMode =
+      fulfillment === "SHIP" && shippingQuote.shippingServiceId
+        ? "MELHOR_ENVIO"
+        : null;
+
     const order = await tx.order.create({
       data: {
         userId,
@@ -542,7 +550,7 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
           create: {
             userId,
             type: "ORDER_CREATED",
-            message: "Pedido criado antes do redirecionamento para a Stripe.",
+            message: "Pedido criado antes do redirecionamento para o Mercado Pago.",
             metadata: JSON.stringify({
               paymentMethod: input.paymentMethod,
               couponCode,
@@ -557,6 +565,10 @@ export async function createDraftOrder(userId: string, input: CheckoutInput) {
         items: true,
       },
     });
+
+    if (initialDispatchMode) {
+      await persistShippingDispatchModeRaw(tx, order.id, initialDispatchMode);
+    }
 
     await tx.user.update({
       where: { id: userId },

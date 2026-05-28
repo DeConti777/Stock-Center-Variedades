@@ -6,7 +6,11 @@ import { getPrismaOrNull } from "@/lib/prisma";
 import { getStripe } from "@/lib/stripe";
 import { orderToEmailOrder, sendOrderEmail } from "@/lib/email";
 import { releaseInventoryReservation } from "@/lib/pix-inventory";
-import { fulfillPaidCheckoutSession } from "@/lib/stripe-checkout-fulfillment";
+import {
+  fulfillPaidCheckoutSession,
+  fulfillPaidPaymentIntent,
+} from "@/lib/stripe-checkout-fulfillment";
+import { markPixPaymentIntentFailed } from "@/lib/stripe-payment-failed";
 
 type DbClient = PrismaClient;
 
@@ -95,7 +99,7 @@ async function wasStripeEventAlreadyProcessed(prisma: DbClient, eventId: string)
 async function registerProcessedStripeEvent(
   prisma: DbClient,
   event: Stripe.Event,
-  checkoutSession?: Stripe.Checkout.Session,
+  context?: { stripeObjectId?: string | null; orderId?: string | null },
 ) {
   try {
     await prisma.stripeWebhookEvent.create({
@@ -103,10 +107,12 @@ async function registerProcessedStripeEvent(
         eventId: event.id,
         type: event.type,
         stripeObjectId:
-          checkoutSession?.id ??
-          ("id" in event.data.object ? (event.data.object as { id: string }).id : null) ??
+          context?.stripeObjectId ??
+          ("id" in event.data.object
+            ? (event.data.object as { id: string }).id
+            : null) ??
           null,
-        orderId: checkoutSession?.metadata?.orderId,
+        orderId: context?.orderId ?? null,
       },
     });
   } catch (error) {
@@ -152,14 +158,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  let checkoutSessionFromEvent: Stripe.Checkout.Session | undefined;
+  let eventContext: { stripeObjectId?: string | null; orderId?: string | null } =
+    {};
 
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"
   ) {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
-    checkoutSessionFromEvent = checkoutSession;
+    eventContext = {
+      stripeObjectId: checkoutSession.id,
+      orderId: checkoutSession.metadata?.orderId,
+    };
     if (
       event.type === "checkout.session.completed" &&
       checkoutSession.payment_status !== "paid"
@@ -179,7 +189,7 @@ export async function POST(request: Request) {
           },
         })
         .catch(() => null);
-      await registerProcessedStripeEvent(prisma, event, checkoutSession);
+      await registerProcessedStripeEvent(prisma, event, eventContext);
       return NextResponse.json({ received: true });
     }
 
@@ -188,11 +198,59 @@ export async function POST(request: Request) {
 
   if (event.type === "checkout.session.async_payment_failed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
-    checkoutSessionFromEvent = checkoutSession;
+    eventContext = {
+      stripeObjectId: checkoutSession.id,
+      orderId: checkoutSession.metadata?.orderId,
+    };
     await markCheckoutSessionFailed(prisma, checkoutSession);
   }
 
-  await registerProcessedStripeEvent(prisma, event, checkoutSessionFromEvent);
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    eventContext = {
+      stripeObjectId: paymentIntent.id,
+      orderId: paymentIntent.metadata?.orderId,
+    };
+    await fulfillPaidPaymentIntent(prisma, paymentIntent);
+  }
+
+  if (event.type === "payment_intent.canceled") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const orderId = paymentIntent.metadata?.orderId;
+    eventContext = {
+      stripeObjectId: paymentIntent.id,
+      orderId,
+    };
+    if (orderId) {
+      await markPixPaymentIntentFailed(prisma, {
+        orderId,
+        paymentIntentId: paymentIntent.id,
+        nextStatus: "EXPIRED",
+        eventType: "PAYMENT_EXPIRED",
+        eventMessage: "Stripe informou cancelamento do Pix.",
+      });
+    }
+  }
+
+  if (event.type === "payment_intent.payment_failed") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const orderId = paymentIntent.metadata?.orderId;
+    eventContext = {
+      stripeObjectId: paymentIntent.id,
+      orderId,
+    };
+    if (orderId) {
+      await markPixPaymentIntentFailed(prisma, {
+        orderId,
+        paymentIntentId: paymentIntent.id,
+        nextStatus: "FAILED",
+        eventType: "PAYMENT_FAILED",
+        eventMessage: "Stripe informou falha no pagamento Pix.",
+      });
+    }
+  }
+
+  await registerProcessedStripeEvent(prisma, event, eventContext);
 
   return NextResponse.json({ received: true });
 }

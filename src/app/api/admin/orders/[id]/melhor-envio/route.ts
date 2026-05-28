@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { getPrismaOrNull } from "@/lib/prisma";
+import { persistShippingDispatchModeRaw } from "@/lib/prisma-shipping-fields";
 import { syncMelhorEnvioForOrderId } from "@/lib/melhor-envio-shipment";
+import { SHIPPING_DISPATCH_MODES } from "@/lib/shipping-dispatch";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+const bodySchema = z
+  .object({
+    shippingDispatchMode: z.enum(SHIPPING_DISPATCH_MODES).optional(),
+  })
+  .optional();
+
+export async function POST(request: Request, context: RouteContext) {
   const session = await auth();
 
   if (!session?.user?.id || session.user.role !== "ADMIN") {
@@ -20,6 +29,21 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
+
+  let body: z.infer<typeof bodySchema>;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      body = bodySchema.parse(await request.json());
+    } catch {
+      body = undefined;
+    }
+  }
+
+  if (body?.shippingDispatchMode === "MELHOR_ENVIO") {
+    await persistShippingDispatchModeRaw(prisma, id, "MELHOR_ENVIO");
+  }
+
   const result = await syncMelhorEnvioForOrderId(prisma, id);
 
   if (result.ok) {

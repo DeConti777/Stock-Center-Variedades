@@ -42,6 +42,30 @@ type ShippingQuoteApiOk = {
   error?: string;
 };
 
+function buildShippingQuoteBody(
+  cep: string,
+  items: { productId: string; quantity: number }[],
+  hint: {
+    city: string;
+    state: string;
+    street: string;
+    neighborhood: string;
+  },
+) {
+  const body: Record<string, unknown> = { cep, items };
+  const city = hint.city.trim();
+  const state = sanitizeUf(hint.state);
+  if (city && state.length === 2) {
+    body.city = city;
+    body.state = state;
+    const street = hint.street.trim();
+    const neighborhood = hint.neighborhood.trim();
+    if (street) body.street = street;
+    if (neighborhood) body.neighborhood = neighborhood;
+  }
+  return body;
+}
+
 function freightStateFromQuoteApi(data: ShippingQuoteApiOk): {
   shippingInCents: number;
   deliveryDays: number | null;
@@ -135,7 +159,7 @@ export function CheckoutView({
     () => (!isGuest && savedDeliveryProp ? "saved" : "new"),
   );
   const [error, setError] = useState<string | null>(null);
-  const [stripeHandoffUrl, setStripeHandoffUrl] = useState<string | null>(null);
+  const [paymentHandoffUrl, setPaymentHandoffUrl] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [formState, setFormState] = useState({
     recipientName: customer.name,
@@ -208,11 +232,25 @@ export function CheckoutView({
       setError(null);
 
       try {
+        const hint =
+          deliveryAddressSource === "saved" && savedDelivery
+            ? {
+                city: savedDelivery.city,
+                state: savedDelivery.state,
+                street: savedDelivery.street,
+                neighborhood: savedDelivery.neighborhood,
+              }
+            : {
+                city: formState.city,
+                state: formState.state,
+                street: formState.street,
+                neighborhood: formState.neighborhood,
+              };
         const res = await fetch("/api/shipping/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: ac.signal,
-          body: JSON.stringify({ cep: cepDigits, items: cart }),
+          body: JSON.stringify(buildShippingQuoteBody(cepDigits, cart, hint)),
         });
         const data = (await res.json()) as ShippingQuoteApiOk;
 
@@ -250,7 +288,7 @@ export function CheckoutView({
       window.clearTimeout(timer);
       ac.abort();
     };
-  }, [cepDigits, cart, fulfillmentMode]);
+  }, [cepDigits, cart, fulfillmentMode, deliveryAddressSource, savedDelivery]);
 
   const pricing = useMemo(() => {
     const productSubtotal = cartProducts.reduce((sum, item) => {
@@ -298,6 +336,22 @@ export function CheckoutView({
     return errors;
   }, [cartProducts]);
 
+  const paymentHighlights = useMemo(() => {
+    if (cartProducts.length === 0) {
+      return { pixDiscountPercent: 0, maxInstallments: 1 };
+    }
+    return {
+      pixDiscountPercent: Math.max(
+        0,
+        ...cartProducts.map((item) => item.pixDiscountPercent),
+      ),
+      maxInstallments: Math.max(
+        1,
+        ...cartProducts.map((item) => item.installment.quantity),
+      ),
+    };
+  }, [cartProducts]);
+
   const profileIncomplete = useMemo(() => {
     if (isGuest) return false;
     const cpf = onlyDigits(customer.cpf, 11);
@@ -319,10 +373,24 @@ export function CheckoutView({
     setCepStatus("loading");
     setCepMessage("Consultando...");
     try {
+      const hint =
+        deliveryAddressSource === "saved" && savedDelivery
+          ? {
+              city: savedDelivery.city,
+              state: savedDelivery.state,
+              street: savedDelivery.street,
+              neighborhood: savedDelivery.neighborhood,
+            }
+          : {
+              city: formState.city,
+              state: formState.state,
+              street: formState.street,
+              neighborhood: formState.neighborhood,
+            };
       const res = await fetch("/api/shipping/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cep: cepDigits, items: cart }),
+        body: JSON.stringify(buildShippingQuoteBody(cepDigits, cart, hint)),
       });
       const data = (await res.json()) as ShippingQuoteApiOk;
       if (!res.ok) {
@@ -379,19 +447,24 @@ export function CheckoutView({
       ? true
       : cepStatus === "ok" && shippingQuoteCents != null);
 
-  function completeStripeRedirect(url: string) {
-    if (process.env.NODE_ENV === "development") {
-      console.info(
-        "[checkout] Redirecionando para Stripe. Se checkout.stripe.com ficar em skeleton, na aba Rede verifique bloqueios a js.stripe.com ou m.stripe.network (Chrome Android: chrome://inspect).",
-      );
-    }
-    trackEcommerceEvent("checkout_stripe_handoff", {
+  function completePaymentRedirect(url: string) {
+    trackEcommerceEvent("checkout_mercadopago_handoff", {
       is_mobile: isLikelyMobileViewport(),
     });
-    setStripeHandoffUrl(url);
+    setPaymentHandoffUrl(url);
     window.setTimeout(() => {
       window.location.assign(url);
     }, 500);
+  }
+
+  function completeCheckoutRedirect(payload: { url?: string; pixUrl?: string }) {
+    if (payload.pixUrl) {
+      window.location.assign(payload.pixUrl);
+      return;
+    }
+    if (payload.url) {
+      completePaymentRedirect(payload.url);
+    }
   }
 
   function handleCheckoutSubmit(analyticsSource: string) {
@@ -448,18 +521,19 @@ export function CheckoutView({
             }),
           });
 
-          let payload: { error?: string; url?: string };
+          let payload: { error?: string; url?: string; pixUrl?: string };
           try {
             payload = (await response.json()) as {
               error?: string;
               url?: string;
+              pixUrl?: string;
             };
           } catch {
             setError("Resposta invalida do servidor. Tente novamente.");
             return;
           }
 
-          if (!response.ok || !payload.url) {
+          if (!response.ok || (!payload.url && !payload.pixUrl)) {
             trackEcommerceEvent("checkout_submit_error", {
               source: analyticsSource,
               reason: payload.error || "checkout_init_failed",
@@ -470,7 +544,7 @@ export function CheckoutView({
             return;
           }
 
-          completeStripeRedirect(payload.url);
+          completeCheckoutRedirect(payload);
         } catch {
           trackEcommerceEvent("checkout_submit_error", {
             source: analyticsSource,
@@ -548,18 +622,19 @@ export function CheckoutView({
           }),
         });
 
-        let payload: { error?: string; url?: string };
+        let payload: { error?: string; url?: string; pixUrl?: string };
         try {
           payload = (await response.json()) as {
             error?: string;
             url?: string;
+            pixUrl?: string;
           };
         } catch {
           setError("Resposta invalida do servidor. Tente novamente.");
           return;
         }
 
-        if (!response.ok || !payload.url) {
+        if (!response.ok || (!payload.url && !payload.pixUrl)) {
           trackEcommerceEvent("checkout_submit_error", {
             source: analyticsSource,
             reason: payload.error || "checkout_init_failed",
@@ -570,7 +645,7 @@ export function CheckoutView({
           return;
         }
 
-        completeStripeRedirect(payload.url);
+        completeCheckoutRedirect(payload);
       } catch {
         trackEcommerceEvent("checkout_submit_error", {
           source: analyticsSource,
@@ -1101,14 +1176,26 @@ export function CheckoutView({
                 key={method.key}
                 type="button"
                 onClick={() => setPaymentMethod(method.key)}
-                className={`flex items-center gap-2.5 rounded-[1.4rem] border px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-4 lg:py-4 ${
+                className={`flex w-full items-center justify-between gap-3 rounded-[1.4rem] border px-3 py-3 text-left sm:px-4 sm:py-4 lg:py-4 ${
                   paymentMethod === method.key
                     ? "border-[var(--color-primary)] bg-[var(--color-soft)]"
                     : "border-[var(--color-line)]"
                 }`}
               >
-                {method.icon}
-                <span className="font-bold text-[var(--color-ink)]">{method.label}</span>
+                <span className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                  {method.icon}
+                  <span className="font-bold text-[var(--color-ink)]">{method.label}</span>
+                </span>
+                {method.key === "PIX" && paymentHighlights.pixDiscountPercent > 0 ? (
+                  <span className="shrink-0 text-xs font-semibold text-[var(--color-muted)] sm:text-sm">
+                    -{paymentHighlights.pixDiscountPercent}%
+                  </span>
+                ) : null}
+                {method.key === "CARD" ? (
+                  <span className="shrink-0 text-xs font-semibold text-[var(--color-muted)] sm:text-sm">
+                    até {paymentHighlights.maxInstallments}x
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -1199,12 +1286,12 @@ export function CheckoutView({
         <button
           type="button"
           disabled={
-            isPending || stockErrors.length > 0 || !canSubmit || stripeHandoffUrl != null
+            isPending || stockErrors.length > 0 || !canSubmit || paymentHandoffUrl != null
           }
           onClick={() => handleCheckoutSubmit("checkout_desktop")}
           className="mt-6 hidden w-full items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-3.5 text-sm font-bold text-white disabled:opacity-70 lg:inline-flex lg:mt-8 lg:py-4"
         >
-          {isPending || stripeHandoffUrl ? "Redirecionando..." : "Ir para pagamento seguro"}
+          {isPending || paymentHandoffUrl ? "Redirecionando..." : "Ir para pagamento seguro"}
         </button>
       </aside>
       <div className="fixed inset-x-3 bottom-3 z-20 rounded-2xl border border-[var(--color-line)] bg-white/95 p-2.5 shadow-[0_20px_40px_rgba(15,23,42,0.14)] backdrop-blur-sm lg:hidden">
@@ -1217,40 +1304,37 @@ export function CheckoutView({
         <button
           type="button"
           disabled={
-            isPending || stockErrors.length > 0 || !canSubmit || stripeHandoffUrl != null
+            isPending || stockErrors.length > 0 || !canSubmit || paymentHandoffUrl != null
           }
           onClick={() => handleCheckoutSubmit("checkout_mobile_sticky")}
           className="touch-target-mobile inline-flex w-full items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-2.5 text-sm font-bold text-white disabled:opacity-70"
         >
-          {isPending || stripeHandoffUrl ? "Redirecionando..." : "Ir para pagamento seguro"}
+          {isPending || paymentHandoffUrl ? "Redirecionando..." : "Ir para pagamento seguro"}
         </button>
       </div>
-      {stripeHandoffUrl ? (
+      {paymentHandoffUrl ? (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="stripe-handoff-title"
+          aria-labelledby="mp-handoff-title"
         >
           <div className="max-w-md rounded-2xl border border-[var(--color-line)] bg-white p-6 shadow-xl">
             <p
-              id="stripe-handoff-title"
+              id="mp-handoff-title"
               className="text-center font-display text-lg font-black text-[var(--color-ink)]"
             >
               Redirecionando para o pagamento seguro
             </p>
             <p className="mt-3 text-center text-sm leading-relaxed text-[var(--color-muted)]">
-              Voce sera enviado para a pagina da Stripe. Se ela ficar em branco ou carregando sem
-              parar, desative bloqueadores de anuncios ou apps de DNS privado, teste outra rede
-              (Wi‑Fi ou dados) ou abra em aba anonima. No Chrome do celular da para inspecionar em{" "}
-              <span className="font-mono text-xs">chrome://inspect</span> e ver se scripts da
-              Stripe falharam na aba Rede.
+              Voce sera enviado para a pagina segura do Mercado Pago para concluir o pagamento com
+              cartao. Se a pagina nao abrir, desative bloqueadores de anuncios ou tente outra rede.
             </p>
             <a
-              href={stripeHandoffUrl}
+              href={paymentHandoffUrl}
               className="mt-5 flex w-full items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-3.5 text-center text-sm font-bold text-white no-underline"
             >
-              Abrir pagamento na Stripe
+              Abrir pagamento no Mercado Pago
             </a>
           </div>
         </div>

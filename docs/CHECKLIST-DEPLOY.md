@@ -23,11 +23,11 @@ Copie de `.env.example` e preencha no painel do host. Nunca commite segredos.
 - [ ] `AUTH_SECRET` — string longa e aleatória (não use o default de desenvolvimento).
 - [ ] `NEXT_PUBLIC_APP_URL` — URL pública **https** do site (exigido em produção para Stripe e links de e-mail).
 
-### Pagamentos (Stripe)
+### Pagamentos (Mercado Pago — Pix + cartão)
 
-- [ ] `STRIPE_SECRET_KEY` — chave **live** em produção (`sk_live_...`).
-- [ ] `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — chave **live** (`pk_live_...`).
-- [ ] `STRIPE_WEBHOOK_SECRET` — segredo do endpoint de webhook configurado no Dashboard Stripe apontando para `/api/webhooks/stripe` na URL pública.
+- [ ] `MERCADOPAGO_ACCESS_TOKEN` — credencial **de produção** (`APP_USR-...`) em produção.
+- [ ] Chave **Pix** cadastrada na conta Mercado Pago de produção.
+- [ ] Webhook/IPN apontando para `https://SEU_DOMINIO/api/webhooks/mercadopago` (eventos de **payment**).
 
 ### E-mail (Resend)
 
@@ -49,7 +49,9 @@ Sem `MELHOR_ENVIO_TOKEN` + `SHIPPING_ORIGIN_POSTAL_CODE` válidos, o site usa **
 
 Não use `vercel.json` para este job (cron integrado da Vercel no Hobby é no máximo 1x/dia). Use **cron no VPS** ou **serviço externo** (ex.: cron-job.org) chamando a URL pública do app.
 
-- [ ] Agendar `GET` ou `POST` em `https://SEU_DOMINIO/api/jobs/pix-expiration` (ex.: a cada 5 minutos).
+- [ ] Agendar `GET` ou `POST` em `https://SEU_DOMINIO/api/jobs/pix-expiration` (recomendado: a cada **1–2 minutos**; o Pix expira em 10 min).
+- [ ] **Pix (Mercado Pago):** `MERCADOPAGO_ACCESS_TOKEN` no `.env` (credenciais em [Mercado Pago Developers](https://www.mercadopago.com.br/developers/panel/credentials)).
+- [ ] No painel Mercado Pago, configurar webhook/IPN para `https://SEU_DOMINIO/api/webhooks/mercadopago` (eventos de **payment**).
 - [ ] `CRON_SECRET` — **obrigatório em produção**; o job exige header `Authorization: Bearer <CRON_SECRET>` (ver `.env.example`).
 
 ### Opcionais de produto / marketing
@@ -74,7 +76,7 @@ Em cada console de OAuth, configure a **URL de callback** do NextAuth (ex.: `htt
 
 ## 3. Contas e consoles externos
 
-- [ ] **Stripe**: conta ativada, métodos de pagamento (Pix/cartão) habilitados, modo **Live**, webhooks com URL de produção.
+- [ ] **Mercado Pago**: conta ativada, Pix e cartão habilitados, credenciais de produção e webhook configurados.
 - [ ] **Resend**: domínio adicionado, registros **SPF/DKIM** no DNS concluídos e verificados.
 - [ ] **Melhor Envio**: conta, transportadoras conectadas, token de API gerado (se usar cotação real).
 - [ ] **Neon**: projeto criado, strings **Pooled** e **Direct** copiadas para `DATABASE_URL` e `DIRECT_URL` (Vercel e `.env` local).
@@ -99,7 +101,7 @@ Em cada console de OAuth, configure a **URL de callback** do NextAuth (ex.: `htt
 - [ ] Login com e-mail/senha e (se ativo) OAuth.
 - [ ] Checkout: cotação de CEP e frete (com e sem Melhor Envio).
 - [ ] Pagamento de teste **live** mínimo ou fluxo de teste aprovado pela equipe (cuidado com chargebacks em testes live).
-- [ ] Webhook Stripe recebendo eventos (log no Dashboard Stripe).
+- [ ] Webhook Mercado Pago recebendo eventos (log no painel MP).
 - [ ] E-mail de pedido ou contato chegando na caixa (e não só em spam).
 - [ ] Se usar cron: verificar resposta 200 do job e estoque após expiração Pix.
 

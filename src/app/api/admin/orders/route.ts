@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { listAdminOrders, updateOrderStatus } from "@/lib/admin-server";
-import { SHIPPING_DISPATCH_MODES } from "@/lib/shipping-dispatch";
-
-const updateOrderSchema = z.object({
-  id: z.string().min(1),
-  status: z.string().min(2),
-  shippingCode: z.string().optional().nullable(),
-  shippingCarrier: z.string().optional().nullable(),
-  shippingDispatchMode: z.enum(SHIPPING_DISPATCH_MODES).optional(),
-  trackingUrl: z.string().url().optional().nullable().or(z.literal("")),
-  invoiceUrl: z.string().url().optional().nullable().or(z.literal("")),
-});
+import {
+  adminOrderPatchSchema,
+  formatAdminOrderPatchError,
+} from "@/lib/admin-order-patch";
 
 function unauthorizedResponse() {
   return NextResponse.json(
@@ -49,17 +42,40 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const result = updateOrderSchema.safeParse(body);
+  const result = adminOrderPatchSchema.safeParse(body);
 
   if (!result.success) {
     return NextResponse.json(
-      { error: "Dados invalidos para atualizar pedido." },
+      { error: formatAdminOrderPatchError(result.error) },
       { status: 400 },
     );
   }
 
   const { id, ...input } = result.data;
-  const order = await updateOrderStatus(id, input);
 
-  return NextResponse.json({ order });
+  try {
+    const order = await updateOrderStatus(id, input);
+    return NextResponse.json({ order });
+  } catch (error) {
+    console.error("[admin/orders PATCH]", error);
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2022" ||
+        error.message.includes("shippingDispatchMode") ||
+        error.message.includes("does not exist"))
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Banco desatualizado: execute `npx prisma migrate deploy` para habilitar o modo de despacho.",
+        },
+        { status: 500 },
+      );
+    }
+
+    const message =
+      error instanceof Error ? error.message : "Erro ao atualizar pedido.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

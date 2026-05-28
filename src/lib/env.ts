@@ -74,6 +74,78 @@ export function getAppUrl() {
 }
 
 /**
+ * Checkout Pro: auto_return exige back_urls.success em HTTPS publico (nao localhost).
+ * Em dev local, omitimos auto_return; o cliente volta pelo botao do Mercado Pago.
+ */
+export function mercadoPagoCheckoutReturnUrls(orderId: string): {
+  back_urls: { success: string; failure: string; pending: string };
+  auto_return?: "approved";
+} {
+  const base = stripTrailingSlash(resolvePublicAppUrl());
+  const back_urls = {
+    success: `${base}/checkout/sucesso?order_id=${encodeURIComponent(orderId)}`,
+    failure: `${base}/checkout/cancelado?order_id=${encodeURIComponent(orderId)}`,
+    pending: `${base}/checkout/sucesso?order_id=${encodeURIComponent(orderId)}`,
+  };
+
+  try {
+    const parsed = new URL(base);
+    if (
+      parsed.protocol === "https:" &&
+      isMercadoPagoAcceptableNotificationHost(parsed.hostname)
+    ) {
+      return { back_urls, auto_return: "approved" };
+    }
+  } catch {
+    /* sem auto_return */
+  }
+
+  return { back_urls };
+}
+
+function isMercadoPagoAcceptableNotificationHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (isLocalDevHost(host)) return false;
+  if (host === "0.0.0.0") return false;
+  return true;
+}
+
+/**
+ * URL de webhook aceita pelo Mercado Pago (HTTPS publico).
+ * Em localhost, retorna null — omita notification_url ou use MERCADOPAGO_NOTIFICATION_URL (ngrok).
+ */
+export function resolveMercadoPagoNotificationUrl(): string | null {
+  const override = process.env.MERCADOPAGO_NOTIFICATION_URL?.trim();
+  if (override) {
+    try {
+      const parsed = new URL(override);
+      if (
+        parsed.protocol === "https:" &&
+        isMercadoPagoAcceptableNotificationHost(parsed.hostname)
+      ) {
+        return stripTrailingSlash(override);
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  const base = resolvePublicAppUrl();
+  try {
+    const parsed = new URL(base);
+    if (parsed.protocol !== "https:") {
+      return null;
+    }
+    if (!isMercadoPagoAcceptableNotificationHost(parsed.hostname)) {
+      return null;
+    }
+    return `${stripTrailingSlash(base)}/api/webhooks/mercadopago`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Em build/runtime de producao, URLs de retorno do Checkout Stripe precisam ser HTTPS
  * e publicas. Retorna mensagem em portugues ou null se aceitavel.
  */

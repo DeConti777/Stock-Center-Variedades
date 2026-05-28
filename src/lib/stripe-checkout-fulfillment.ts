@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import Stripe from "stripe";
 import type { PrismaClient } from "@prisma/client";
+import { refundMercadoPagoPayment } from "@/lib/mercado-pago";
 import { getStripe } from "@/lib/stripe";
 import { orderToEmailOrder, sendOrderEmail } from "@/lib/email";
 import { syncMelhorEnvioForPaidOrder } from "@/lib/melhor-envio-shipment";
@@ -57,7 +58,9 @@ function parseInventoryRaceError(error: unknown) {
   }
 }
 
-function getPaymentIntentId(checkoutSession: Stripe.Checkout.Session) {
+export function getPaymentIntentIdFromCheckoutSession(
+  checkoutSession: Stripe.Checkout.Session,
+) {
   return typeof checkoutSession.payment_intent === "string"
     ? checkoutSession.payment_intent
     : checkoutSession.payment_intent &&
@@ -66,39 +69,63 @@ function getPaymentIntentId(checkoutSession: Stripe.Checkout.Session) {
       : null;
 }
 
+type FulfillPaidOrderInput = {
+  orderId: string;
+  paymentIntentId: string | null;
+  checkoutSessionId?: string | null;
+  mercadoPagoPaymentId?: string | null;
+  source?: string;
+};
+
 async function refundInventoryRacePayment(
   prisma: DbClient,
-  checkoutSession: Stripe.Checkout.Session,
-  paymentIntentId: string | null,
-  race: ReturnType<typeof parseInventoryRaceError>,
+  input: {
+    orderId: string;
+    paymentIntentId?: string | null;
+    mercadoPagoPaymentId?: string | null;
+    checkoutSessionId?: string | null;
+    race: NonNullable<ReturnType<typeof parseInventoryRaceError>>;
+  },
 ) {
-  const orderId = checkoutSession.metadata?.orderId;
-  if (!orderId || !race) return false;
-  if (!paymentIntentId) {
-    throw new Error("Pagamento sem payment_intent para estorno automatico.");
+  let refundProvider: "stripe" | "mercadopago" | null = null;
+  let refundExternalId: string | null = null;
+
+  if (input.paymentIntentId) {
+    const stripe = getStripe();
+    const refund = await stripe.refunds.create({
+      payment_intent: input.paymentIntentId,
+      reason: "requested_by_customer",
+      metadata: {
+        orderId: input.orderId,
+        checkoutSessionId: input.checkoutSessionId ?? "",
+        cause: "OUT_OF_STOCK_RACE",
+        productId: input.race.productId,
+        productName: input.race.productName,
+        requestedQty: String(input.race.requestedQty),
+        availableStock: String(input.race.availableStock ?? ""),
+      },
+    });
+    refundProvider = "stripe";
+    refundExternalId = refund.id;
+  } else if (input.mercadoPagoPaymentId) {
+    const refund = await refundMercadoPagoPayment(input.mercadoPagoPaymentId);
+    refundProvider = "mercadopago";
+    refundExternalId = String(refund.id);
+  } else {
+    return false;
   }
 
-  const stripe = getStripe();
-  const refund = await stripe.refunds.create({
-    payment_intent: paymentIntentId,
-    reason: "requested_by_customer",
-    metadata: {
-      orderId,
-      checkoutSessionId: checkoutSession.id,
-      cause: "OUT_OF_STOCK_RACE",
-      productId: race.productId,
-      productName: race.productName,
-      requestedQty: String(race.requestedQty),
-      availableStock: String(race.availableStock ?? ""),
-    },
-  });
-
   await prisma.order.update({
-    where: { id: orderId },
+    where: { id: input.orderId },
     data: {
       status: "CANCELED",
       canceledAt: new Date(),
-      stripePaymentIntentId: paymentIntentId,
+      ...(input.paymentIntentId
+        ? { stripePaymentIntentId: input.paymentIntentId }
+        : {}),
+      ...(input.mercadoPagoPaymentId
+        ? { mercadoPagoPaymentId: input.mercadoPagoPaymentId }
+        : {}),
       checkoutEvents: {
         create: {
           type: "INVENTORY_RACE_REFUND_SUCCEEDED",
@@ -106,21 +133,32 @@ async function refundInventoryRacePayment(
             "Pagamento estornado automaticamente por indisponibilidade de estoque.",
           metadata: JSON.stringify({
             reason: "OUT_OF_STOCK_RACE",
-            stripeCheckoutSessionId: checkoutSession.id,
-            stripePaymentIntentId: paymentIntentId,
-            stripeRefundId: refund.id,
-            race,
+            refundProvider,
+            refundExternalId,
+            stripeCheckoutSessionId: input.checkoutSessionId ?? null,
+            stripePaymentIntentId: input.paymentIntentId ?? null,
+            mercadoPagoPaymentId: input.mercadoPagoPaymentId ?? null,
+            race: input.race,
           }),
         },
       },
       paymentAttempts: {
         updateMany: {
-          where: {
-            stripeCheckoutSessionId: checkoutSession.id,
-          },
+          where: input.checkoutSessionId
+            ? { stripeCheckoutSessionId: input.checkoutSessionId }
+            : input.mercadoPagoPaymentId
+              ? { orderId: input.orderId, mercadoPagoPaymentId: input.mercadoPagoPaymentId }
+              : input.paymentIntentId
+                ? { orderId: input.orderId, stripePaymentIntentId: input.paymentIntentId }
+                : { orderId: input.orderId },
           data: {
             status: "REFUNDED",
-            stripePaymentIntentId: paymentIntentId,
+            ...(input.paymentIntentId
+              ? { stripePaymentIntentId: input.paymentIntentId }
+              : {}),
+            ...(input.mercadoPagoPaymentId
+              ? { mercadoPagoPaymentId: input.mercadoPagoPaymentId, provider: "MERCADO_PAGO" }
+              : {}),
             errorMessage:
               "Pagamento estornado automaticamente por corrida de estoque.",
           },
@@ -143,18 +181,22 @@ function generatePickupCandidate(): string {
   return candidate;
 }
 
-/** Marca pedido como PAID e baixa estoque — mesma logica do webhook Stripe. */
-export async function fulfillPaidCheckoutSession(
+/** Marca pedido como PAID e baixa estoque — nucleo compartilhado Pix e cartao. */
+export async function fulfillPaidOrder(
   prisma: DbClient,
-  checkoutSession: Stripe.Checkout.Session,
+  input: FulfillPaidOrderInput,
 ) {
-  const orderId = checkoutSession.metadata?.orderId;
+  const {
+    orderId,
+    paymentIntentId,
+    checkoutSessionId,
+    mercadoPagoPaymentId,
+    source = "webhook",
+  } = input;
 
   if (!orderId) {
-    return;
+    return null;
   }
-
-  const paymentIntentId = getPaymentIntentId(checkoutSession);
 
   try {
     const paidOrder = await prisma.$transaction(async (tx) => {
@@ -251,13 +293,21 @@ export async function fulfillPaidCheckoutSession(
         },
       });
 
+      const paymentAttemptWhere = checkoutSessionId
+        ? { orderId: order.id, stripeCheckoutSessionId: checkoutSessionId }
+        : paymentIntentId
+          ? { orderId: order.id, stripePaymentIntentId: paymentIntentId }
+          : mercadoPagoPaymentId
+            ? { orderId: order.id, mercadoPagoPaymentId }
+            : { orderId: order.id };
+
       await tx.paymentAttempt.updateMany({
-        where: {
-          orderId: order.id,
-          stripeCheckoutSessionId: checkoutSession.id,
-        },
+        where: paymentAttemptWhere,
         data: {
-          stripePaymentIntentId: paymentIntentId,
+          ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
+          ...(mercadoPagoPaymentId
+            ? { mercadoPagoPaymentId, provider: "MERCADO_PAGO" }
+            : {}),
           status: "PAID",
         },
       });
@@ -268,13 +318,14 @@ export async function fulfillPaidCheckoutSession(
           userId: order.userId,
           type: "PAYMENT_CONFIRMED",
           message: order.inventoryReserved
-            ? "Stripe confirmou pagamento e converteu reserva em baixa definitiva."
-            : "Stripe confirmou pagamento e estoque foi decrementado.",
+            ? "Pagamento confirmado e reserva de estoque convertida em baixa definitiva."
+            : "Pagamento confirmado e estoque decrementado.",
           metadata: JSON.stringify({
-            stripeCheckoutSessionId: checkoutSession.id,
+            stripeCheckoutSessionId: checkoutSessionId ?? null,
             stripePaymentIntentId: paymentIntentId,
+            mercadoPagoPaymentId: mercadoPagoPaymentId ?? null,
             inventoryReserved: order.inventoryReserved,
-            source: checkoutSession.metadata?.reconcileSource ?? "webhook",
+            source,
           }),
         },
       });
@@ -302,7 +353,10 @@ export async function fulfillPaidCheckoutSession(
         data: {
           status: "PAID",
           paidAt: new Date(),
-          stripePaymentIntentId: paymentIntentId,
+          stripePaymentIntentId:
+            paymentIntentId ?? order.stripePaymentIntentId ?? undefined,
+          mercadoPagoPaymentId:
+            mercadoPagoPaymentId ?? order.mercadoPagoPaymentId ?? undefined,
           inventoryReserved: false,
           inventoryReservedAt: null,
           inventoryReserveExpiresAt: null,
@@ -340,14 +394,15 @@ export async function fulfillPaidCheckoutSession(
         ? error.message
         : "Falha ao confirmar estoque no webhook.";
 
-    if (isInventoryRace) {
+    if (isInventoryRace && (paymentIntentId || mercadoPagoPaymentId) && race) {
       try {
-        const refunded = await refundInventoryRacePayment(
-          prisma,
-          checkoutSession,
+        const refunded = await refundInventoryRacePayment(prisma, {
+          orderId,
           paymentIntentId,
+          mercadoPagoPaymentId,
+          checkoutSessionId,
           race,
-        );
+        });
         if (refunded) {
           return null;
         }
@@ -368,7 +423,7 @@ export async function fulfillPaidCheckoutSession(
                   message: `${message} Estorno automatico falhou.`,
                   metadata: JSON.stringify({
                     reason: "OUT_OF_STOCK_RACE",
-                    stripeCheckoutSessionId: checkoutSession.id,
+                    stripeCheckoutSessionId: checkoutSessionId ?? null,
                     stripePaymentIntentId: paymentIntentId,
                     race,
                     refundError: refundMessage,
@@ -377,9 +432,9 @@ export async function fulfillPaidCheckoutSession(
               },
               paymentAttempts: {
                 updateMany: {
-                  where: {
-                    stripeCheckoutSessionId: checkoutSession.id,
-                  },
+                  where: checkoutSessionId
+                    ? { stripeCheckoutSessionId: checkoutSessionId }
+                    : { orderId, stripePaymentIntentId: paymentIntentId },
                   data: {
                     status: "REQUIRES_REVIEW",
                     stripePaymentIntentId: paymentIntentId,
@@ -399,7 +454,7 @@ export async function fulfillPaidCheckoutSession(
         where: { id: orderId },
         data: {
           status: "REQUIRES_REVIEW",
-          stripePaymentIntentId: paymentIntentId,
+          stripePaymentIntentId: paymentIntentId ?? undefined,
           checkoutEvents: {
             create: {
               type: isInventoryRace
@@ -407,7 +462,7 @@ export async function fulfillPaidCheckoutSession(
                 : "PAYMENT_REQUIRES_REVIEW",
               message,
               metadata: JSON.stringify({
-                stripeCheckoutSessionId: checkoutSession.id,
+                stripeCheckoutSessionId: checkoutSessionId ?? null,
                 stripePaymentIntentId: paymentIntentId,
                 reason: isInventoryRace ? "OUT_OF_STOCK_RACE" : "UNKNOWN",
                 race,
@@ -416,12 +471,14 @@ export async function fulfillPaidCheckoutSession(
           },
           paymentAttempts: {
             updateMany: {
-              where: {
-                stripeCheckoutSessionId: checkoutSession.id,
-              },
+              where: checkoutSessionId
+                ? { stripeCheckoutSessionId: checkoutSessionId }
+                : paymentIntentId
+                  ? { orderId, stripePaymentIntentId: paymentIntentId }
+                  : { orderId },
               data: {
                 status: "REQUIRES_REVIEW",
-                stripePaymentIntentId: paymentIntentId,
+                stripePaymentIntentId: paymentIntentId ?? undefined,
                 errorMessage: message,
               },
             },
@@ -432,4 +489,43 @@ export async function fulfillPaidCheckoutSession(
 
     return null;
   }
+}
+
+/** Marca pedido como PAID a partir de Checkout Session (cartao). */
+export async function fulfillPaidCheckoutSession(
+  prisma: DbClient,
+  checkoutSession: Stripe.Checkout.Session,
+) {
+  const orderId = checkoutSession.metadata?.orderId;
+  if (!orderId) {
+    return null;
+  }
+
+  return fulfillPaidOrder(prisma, {
+    orderId,
+    paymentIntentId: getPaymentIntentIdFromCheckoutSession(checkoutSession),
+    checkoutSessionId: checkoutSession.id,
+    source: checkoutSession.metadata?.reconcileSource ?? "webhook",
+  });
+}
+
+/** Marca pedido como PAID a partir de PaymentIntent (Pix na pagina propria). */
+export async function fulfillPaidPaymentIntent(
+  prisma: DbClient,
+  paymentIntent: Stripe.PaymentIntent,
+) {
+  const orderId = paymentIntent.metadata?.orderId;
+  if (!orderId) {
+    return null;
+  }
+
+  if (paymentIntent.status !== "succeeded") {
+    return null;
+  }
+
+  return fulfillPaidOrder(prisma, {
+    orderId,
+    paymentIntentId: paymentIntent.id,
+    source: paymentIntent.metadata?.reconcileSource ?? "payment_intent_webhook",
+  });
 }
